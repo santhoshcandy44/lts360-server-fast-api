@@ -4,6 +4,22 @@ from sqlalchemy import Column, BigInteger, ForeignKey, Enum as SAEnum
 from typing import Optional
 from datetime import datetime, timezone
 
+class E2EEPublicKey(SQLModel, table=True):
+    __tablename__ = "e2ee_public_keys"
+
+    user_id:              int      = Field(
+                                        sa_column=Column(
+                                            BigInteger,
+                                            ForeignKey("users.user_id", ondelete="CASCADE"),
+                                            primary_key=True,
+                                            nullable=False,
+                                        )
+                                    )
+    encrypted_public_key: str      = Field()
+    key_version:          int      = Field()
+    created_at:           datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at:           datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    
 class ChatInfo(SQLModel, table=True):
     __tablename__ = "chat_info"
  

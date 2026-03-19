@@ -5,7 +5,7 @@ from config import ACCESS_TOKEN_SECRET, ALGORITHM
 
 bearer_scheme = HTTPBearer()
 
-""" async def authenticate_token(
+async def authenticate_token(
     request: Request,
     credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
 ):
@@ -30,4 +30,4 @@ bearer_scheme = HTTPBearer()
         raise HTTPException(status_code=498, detail="Invalid session")
  
     request.state.user = existing_user
-    return existing_user """
+    return existing_user

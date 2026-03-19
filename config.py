@@ -10,6 +10,8 @@ REFRESH_TOKEN_SECRET = os.getenv("REFRESH_TOKEN_SECRET")
 ALGORITHM            = os.getenv("ALGORITHM", "HS256")
 TOKEN_EXPIRE_MINUTES = int(os.getenv("TOKEN_EXPIRE_MINUTES", "30"))
 
+API_DOC_BASE_URL = os.getenv("API_DOC_BASE_URL", "http://localhost:8000")
+
 DATABASE_URL = os.getenv("DATABASE_URL")
 
 APP_NAME    = os.getenv("APP_NAME", "LTS360 Server")
