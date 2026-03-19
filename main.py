@@ -1,8 +1,10 @@
 from config import APP_NAME
 from contextlib import asynccontextmanager
 from database import init_db
-import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 
+from helpers.response_helper import send_error_response
 from routers import (
     auth,
     account,
@@ -22,8 +24,27 @@ async def lifespan(app: FastAPI):
     yield
     print("🛑 Shutting down")
 
-
 application = FastAPI(title=APP_NAME, lifespan=lifespan)
+
+@application.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    errors = exc.errors()
+    
+    if errors:
+        first_error = errors[0]
+        field   = " -> ".join(str(loc) for loc in first_error["loc"] if loc != "body")
+        message = first_error["msg"]
+        detail  = f"{field}: {message}" if field else message
+    else:
+        detail = "Invalid request"
+
+    return send_error_response(
+        request=request,
+        status_code=422,
+        message=detail,
+        error_details=errors or None,
+        error_code="VALIDATION_ERROR",
+    )
 
 application.include_router(auth.router,          prefix="/api/v1")
 application.include_router(app.router,           prefix="/api/v1")
