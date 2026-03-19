@@ -42,15 +42,3 @@ class UserBookmarkUsedProductListing(SQLModel, table=True):
     created_at:              datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at:              datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
     
-class UserIndustry(SQLModel, table=True):
-    __tablename__ = "user_industries"
-    __table_args__ = (
-        UniqueConstraint("user_id", "industry_id", name="unique_user_industry"),
-    )
- 
-    id:          Optional[int] = Field(primary_key=True)
-    user_id:     int           = Field(sa_column=Column(BigInteger, ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False))
-    industry_id: int           = Field(sa_column=Column(BigInteger, ForeignKey("industries.industry_id", ondelete="CASCADE"), nullable=False, index=True))
-    created_at:  datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at:  datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
-     

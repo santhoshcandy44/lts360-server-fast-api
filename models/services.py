@@ -1,11 +1,11 @@
-# models/services/search_queries.py
+from decimal import Decimal
 from typing import Optional
 from datetime import datetime, timezone
 import string
 import random
 
 from sqlmodel import SQLModel, Field
-from sqlalchemy import Column, BigInteger, ForeignKey, Enum as SAEnum, event
+from sqlalchemy import Column, Integer, BigInteger, Numeric, ForeignKey, Enum as SAEnum, event
 from sqlalchemy.orm import Session
 
 class Service(SQLModel, table=True):
@@ -16,7 +16,7 @@ class Service(SQLModel, table=True):
     title:             str           = Field(max_length=255)
     short_description: str           = Field(max_length=500)
     long_description:  str           = Field()
-    industry:          int           = Field(sa_column=Column(BigInteger, ForeignKey("industries.industry_id", ondelete="CASCADE"), nullable=False, index=True))
+    industry:          int           = Field(sa_column=Column(Integer, ForeignKey("service_industries.industry_id", ondelete="CASCADE"), nullable=False, index=True))
     status:            str           = Field(
                                            sa_column=Column(
                                                SAEnum("Active", "In-Review", "Rejected", "Suspended", name="service_status"),
@@ -107,7 +107,7 @@ class ServiceReviewReply(SQLModel, table=True):
  
     id:                Optional[int] = Field(primary_key=True)
     user_id:           int           = Field(sa_column=Column(BigInteger, ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False, index=True))
-    service_review_id: int           = Field(sa_column=Column(BigInteger, ForeignKey("service_reviews.id", ondelete="CASCADE"), nullable=False, index=True))
+    service_review_id: int           = Field(sa_column=Column(Integer, ForeignKey("service_reviews.id", ondelete="CASCADE"), nullable=False, index=True))
     reply:             str           = Field()
     created_at:        datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at:        datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))

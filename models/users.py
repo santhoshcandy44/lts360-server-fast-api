@@ -7,7 +7,7 @@ from typing import Optional
 
 from models.local_jobs import LocalJobApplicant
 from sqlmodel import SQLModel, Field, Column, Relationship
-from sqlalchemy import Column, BigInteger, ForeignKey, UniqueConstraint, Numeric, Enum as SAEnum, UniqueConstraint, event
+from sqlalchemy import Column, Integer, BigInteger, ForeignKey, UniqueConstraint, Numeric, Enum as SAEnum, UniqueConstraint, event
 from sqlalchemy.orm import Session
 
 class User(SQLModel, table=True):
@@ -87,11 +87,25 @@ class UserBoard(SQLModel, table=True):
  
     id:            Optional[int] = Field(primary_key=True)
     user_id:       int           = Field(sa_column=Column(BigInteger, ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False))
-    board_id:      int           = Field(sa_column=Column(BigInteger, ForeignKey("boards.board_id", ondelete="CASCADE"), nullable=False, index=True))
+    board_id:      int           = Field(sa_column=Column(Integer, ForeignKey("boards.board_id", ondelete="CASCADE"), nullable=False, index=True))
     display_order: Optional[int] = Field(default=-1)
     is_selected:   Optional[int] = Field(default=0)
     created_at:    datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at:    datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class UserServiceIndustry(SQLModel, table=True):
+    __tablename__ = "user_service_industries"
+    __table_args__ = (
+        UniqueConstraint("user_id", "industry_id", name="unique_user_industry"),
+    )
+ 
+    id:          Optional[int] = Field(primary_key=True)
+    user_id:     int           = Field(sa_column=Column(BigInteger, ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False))
+    industry_id: int           = Field(sa_column=Column(Integer, ForeignKey("service_industries.industry_id", ondelete="CASCADE"), nullable=False, index=True))
+    created_at:  datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at:  datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
+     
 
 def _generate_short_code() -> str:
     chars = string.ascii_letters + string.digits 

@@ -1,6 +1,5 @@
 import json
 import uuid
-import random
 from datetime import datetime, timezone
 
 from fastapi import Request, UploadFile
@@ -27,11 +26,8 @@ from utils.aws_s3 import upload_to_s3, delete_from_s3, delete_directory_from_s3
 from kafka.notification_service_producer import send_local_job_applicant_applied_notification_to_kafka
 
 
-# ── Shared helpers ─────────────────────────────────────────────────────────────
-
 def _fmt_url(base, path):
     return f"{base}/{path}" if path else None
-
 
 def _job_response(
     job:          LocalJob,
@@ -243,11 +239,7 @@ async def _query_jobs(
     return _paginate(rows, last_row, page_size,next_token if payload else None)
 
     
-async def get_local_jobs(
-    request: Request,
-    schema: GetLocalJobsbSchema,
-    db: AsyncSession
-):
+async def get_local_jobs(request: Request, schema: GetLocalJobsbSchema, db: AsyncSession):
     try:
         s = schema.s
         page_size = page_size
@@ -266,11 +258,7 @@ async def get_local_jobs(
     except Exception:
         return send_error_response(request, 500, "Internal server error")
 
-async def guest_get_local_jobs(
-    request: Request,
-    schema: GuestGetLocalJobsSchema,
-    db: AsyncSession
-):
+async def guest_get_local_jobs(request: Request, schema: GuestGetLocalJobsSchema, db: AsyncSession):
     try:
     
         return send_json_response(200, "Local jobs fetched", data= None)
