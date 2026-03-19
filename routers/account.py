@@ -1,5 +1,5 @@
 from database import get_db
-from middleware.auth_middleware import authenticate_token
+from .middleware.auth_middleware import authenticate_token
 
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,7 +12,7 @@ from schemas.account_schemas import (
     ResetPasswordRequest,
 )
 
-from controllers import account_controller
+from  controllers import profile_controller
 
 router = APIRouter(
     prefix="/account",
@@ -27,7 +27,7 @@ async def update_account_type(
     request: Request,
     db:      AsyncSession = Depends(get_db),
 ):
-    return await account_controller.update_account_type(request, body, db)
+    return await profile_controller.update_account_type(request, body, db)
 
 
 @router.put("/change-password")
@@ -36,7 +36,7 @@ async def change_password(
     request: Request,
     db:      AsyncSession = Depends(get_db),
 ):
-    return await account_controller.change_password(request, body, db)
+    return await profile_controller.change_password(request, body, db)
 
 
 @router.post("/forgot-password/otp")
@@ -45,7 +45,7 @@ async def forgot_password(
     request: Request,
     db:      AsyncSession = Depends(get_db),
 ):
-    return await account_controller.forgot_password(request, body, db)
+    return await profile_controller.forgot_password(request, body, db)
 
 
 @router.post("/forgot-password/otp/verify")
@@ -54,7 +54,7 @@ async def forgot_password_otp_verify(
     request: Request,
     db:      AsyncSession = Depends(get_db),
 ):
-    return await account_controller.forgot_password_otp_verify(request, body, db)
+    return await profile_controller.forgot_password_otp_verify(request, body, db)
 
 
 @router.post("/reset-password")
@@ -63,4 +63,4 @@ async def reset_password(
     request: Request,
     db:      AsyncSession = Depends(get_db),
 ):
-    return await account_controller.reset_password(request, body, db)
+    return await profile_controller.reset_password(request, body, db)

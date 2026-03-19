@@ -124,3 +124,14 @@ def before_insert_local_job(mapper, connection, target):
  
     if not target.short_code:
         target.short_code = _generate_short_code()
+
+    
+class FCMToken(SQLModel, table=True):
+    __tablename__ = "fcm_tokens"
+ 
+    id:         Optional[int] = Field(primary_key=True)
+    user_id:    int           = Field(sa_column=Column(BigInteger, ForeignKey("users.user_id", ondelete="CASCADE"), unique=True, nullable=False))
+    fcm_token:  Optional[str] = Field(default=None)
+    created_at: datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
+     

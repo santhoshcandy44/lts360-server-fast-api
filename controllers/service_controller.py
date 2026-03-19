@@ -5,21 +5,15 @@ from datetime import datetime, timezone
 from fastapi import Request, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
-from sqlalchemy import func, or_, and_, update, delete
+from sqlalchemy import func, or_, and_, delete
 from sqlalchemy.dialects.mysql import insert
 
-from models.services.service import Service
-from models.services.service_image import ServiceImage
-from models.services.service_plan import ServicePlan
-from models.services.service_location import ServiceLocation
-from models.services.service_thumbnail import ServiceThumbnail
-from models.services.service_search_query import ServiceSearchQuery
-from models.services.user_industry import UserIndustry
-from models.services.industry import Industry
-from models.user import User
-from models.chat_info import ChatInfo
-from models.user_locations import UserLocation
-from models.user_bookmark_services import UserBookmarkService
+from models.services import Service, ServiceThumbnail, ServiceImage, ServiceLocation , ServicePlan, ServiceSearchQuery
+from models.users import UserServiceIndustry
+from models.users import User, UserLocation
+from models.chats import ChatInfo
+from models.bookmarks import UserBookmarkService
+
 from config import BASE_URL, PROFILE_BASE_URL, MEDIA_BASE_URL
 from helpers.response_helper import send_json_response, send_error_response
 from utils.pagination.cursor import encode_cursor, decode_cursor

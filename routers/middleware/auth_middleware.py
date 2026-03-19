@@ -5,7 +5,7 @@ from helpers.response_helper import send_error_response
 from jose import JWTError, jwt
 
 from database import get_db
-from models.user import User
+from models.users import User
 
 from fastapi import Depends, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials

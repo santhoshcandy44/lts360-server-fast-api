@@ -6,23 +6,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import func, case, literal, union_all, null
 from sqlalchemy.dialects.mysql import insert
 
-from models.user import User
-from models.user_locations import UserLocation
-from models.e2ee_public_keys import E2EEPublicKey
-from models.fcm_token import FCMToken
-from models.services.services import Service
-from models.services.service_images import ServiceImage
-from models.services.service_plans import ServicePlan
-from models.services.service_thumbnail import ServiceThumbnail
-from models.used_products.used_product_listings import UsedProductListing
-from models.used_products.used_product_listing_images import UsedProductListingImage
-from models.local_jobs.local_jobs import LocalJob
-from models.local_jobs.local_job_images import LocalJobImage
-from models.industry import Industry
-from models.chat_info import ChatInfo
-from models.user_bookmark_services import UserBookmarkService
-from models.user_bookmark_used_product_listings import UserBookmarkUsedProductListing
-from models.user_bookmark_local_jobs import UserBookmarkLocalJob
+from models.users import User, UserLocation, FCMToken
+from models.chats import E2EEPublicKey, ChatInfo
+from models.services import Service, ServiceThumbnail, ServiceImage, ServicePlan 
+from models.used_product_listings import UsedProductListing, UsedProductListingImage
+from models.local_jobs import LocalJob, LocalJobImage
+from models.bookmarks import UserBookmarkService, UserBookmarkUsedProductListing, UserBookmarkLocalJob
 from config import PROFILE_BASE_URL, MEDIA_BASE_URL, BASE_URL
 
 from helpers.response_helper import send_json_response, send_error_response

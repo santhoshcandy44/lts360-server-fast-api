@@ -3,27 +3,25 @@ import uuid
 from datetime import datetime, timezone
 
 from fastapi import Request, UploadFile
-from schemas.local_job_schemas import GetLocalJobApplicationsRequest, GetLocalJobParams, GetLocalJobsbSchema, GetMeLocalJobsRequest, GuestGetLocalJobsSchema, LocalJobApplicationParam, LocalJobIdParam, SearchSuggestionsRequest
+from schemas.local_job_schemas import GetLocalJobApplicationsRequest, GetLocalJobsbSchema, GetMeLocalJobsRequest, GuestGetLocalJobsSchema, LocalJobApplicationParam, LocalJobIdParam, SearchSuggestionsRequest
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlmodel import select, col
-from sqlalchemy import func, or_, and_, case, update, delete
+from sqlmodel import select
+from sqlalchemy import func, or_, and_, update, delete
 from sqlalchemy.dialects.mysql import insert
 from sqlalchemy.orm import selectinload
 
-from models.local_jobs.local_job import LocalJob
-from models.local_jobs.local_job_image import LocalJobImage
-from models.local_jobs.local_job_location import LocalJobLocation
-from models.local_jobs.local_job_search_query import LocalJobSearchQuery
-from models.local_jobs.local_job_applicant import LocalJobApplicant
-from models.user import User
-from models.chat_info import ChatInfo
-from models.user_locations import UserLocation
-from models.user_bookmark_local_jobs import UserBookmarkLocalJob
+from models.local_jobs import LocalJobSearchQuery
+from models.local_jobs import LocalJob, LocalJobImage, LocalJobLocation, LocalJobApplicant, LocalJobSearchQuery
+from models.users import User
+from models.chats import ChatInfo
+from models.users import UserLocation
+from models.bookmarks import UserBookmarkLocalJob
+
 from config import BASE_URL, PROFILE_BASE_URL, MEDIA_BASE_URL
 from helpers.response_helper import send_json_response, send_error_response
 from utils.pagination.cursor import encode_cursor, decode_cursor
 from utils.aws_s3 import upload_to_s3, delete_from_s3, delete_directory_from_s3
-from kafka.notification_service_producer import send_local_job_applicant_applied_notification_to_kafka
+# from kafka.notification_service_producer import send_local_job_applicant_applied_notification_to_kafka
 
 
 def _fmt_url(base, path):

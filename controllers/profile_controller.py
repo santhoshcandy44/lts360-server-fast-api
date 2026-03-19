@@ -6,9 +6,8 @@ from fastapi import Request, UploadFile
 from sqlmodel import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from models.user import User
-from models.user_locations import UserLocation
-from models.fcm_token import FCMToken
+from models.users import User, UserLocation
+from models.users import FCMToken
 
 from helpers.response_helper import send_json_response, send_error_response
 from utils.auth import generate_otp, send_otp_email

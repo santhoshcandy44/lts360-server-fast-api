@@ -1,5 +1,5 @@
 from database import get_db
-from middleware.auth_middleware import authenticate_token
+from .middleware.auth_middleware import authenticate_token
 
 from fastapi import APIRouter, Depends, Request, UploadFile, File
 from sqlalchemy.ext.asyncio import AsyncSession

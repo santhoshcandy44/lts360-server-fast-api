@@ -19,8 +19,8 @@ from fastapi import Request
 from sqlmodel import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from models.user import User
-from board_controller import create_default_boards_for_user, get_boards
+from models.users import User
+from .board_controller import create_default_boards_for_user, get_boards
 
 def _build_user_response(result, profile_base_url: str) -> dict:
     return {

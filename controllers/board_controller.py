@@ -4,8 +4,8 @@ from sqlmodel import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.dialects.mysql import insert
 
-from models.board import Board
-from models.user_boards import UserBoard
+from models.common import Board
+from models.users import UserBoard
 from helpers.response_helper import send_json_response, send_error_response
 
 async def create_default_boards_for_user(user_id: int, db: AsyncSession):
@@ -32,7 +32,6 @@ async def create_default_boards_for_user(user_id: int, db: AsyncSession):
  
     await db.flush()
  
-
 async def get_boards(request: Request, db: AsyncSession):
     try:
         user_id = request.state.user.user_id
@@ -64,7 +63,6 @@ async def get_boards(request: Request, db: AsyncSession):
     except Exception:
         return send_error_response(request, 500, "Internal server error")
 
-
 async def guest_get_boards(request: Request, db: AsyncSession):
     try:
         result = await db.execute(select(Board))
@@ -87,7 +85,6 @@ async def guest_get_boards(request: Request, db: AsyncSession):
         return send_json_response(200, "Boards fetched successfully", data=boards)
     except Exception:
         return send_error_response(request, 500, "Internal server error")
-
 
 async def update_boards(request: Request, body, db: AsyncSession):
     try:

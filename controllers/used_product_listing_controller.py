@@ -8,14 +8,11 @@ from sqlalchemy.dialects.mysql import insert
 from sqlalchemy.orm import selectinload
 from datetime import datetime, timezone
 
-from models.used_products.used_product_listings import UsedProductListing
-from models.used_products.used_product_listing_images import UsedProductListingImage
-from models.used_products.used_product_listing_location import UsedProductListingLocation
-from models.used_products.used_product_listing_search_queries import UsedProductListingSearchQuery
-from models.user import User
-from models.user_locations import UserLocation
-from models.chat_info import ChatInfo
-from models.user_bookmark_used_product_listings import UserBookmarkUsedProductListing
+from models.used_product_listings import UsedProductListing, UsedProductListingImage, UsedProductListingLocation, UsedProductListingSearchQuery
+from models.users import User, UserLocation
+from models.chats import ChatInfo
+from models.bookmarks import UserBookmarkUsedProductListing
+
 from config import PROFILE_BASE_URL, MEDIA_BASE_URL, BASE_URL
 from helpers.response_helper import send_json_response, send_error_response
 from utils.pagination.cursor import encode_cursor, decode_cursor
@@ -104,12 +101,6 @@ def _paginate(items: list, rows, page_size: int, next_token: str | None, payload
         "previous_token": next_token if payload else None,
     }
 
-
-_LOAD_OPTS = [
-    selectinload(UsedProductListing.images),
-    selectinload(UsedProductListing.location),
-    selectinload(UsedProductListing.owner).selectinload(User.chat_info),
-]
 
 async def _query_listings(
     db: AsyncSession,

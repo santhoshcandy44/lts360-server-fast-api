@@ -30,7 +30,11 @@ FORGOT_PASSWORD_TOKEN_SECRET  = os.getenv("FORGOT_PASSWORD_TOKEN_SECRET", "forgo
 ACCESS_TOKEN_EXPIRE_MINUTES   = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
 REFRESH_TOKEN_EXPIRE_DAYS     = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "7"))
 GOOGLE_CLIENT_ID              = os.getenv("GOOGLE_CLIENT_ID")
+
+
+BASE_URL =  os.getenv("BASE_URL", "http://localhost:8000/")
 PROFILE_BASE_URL              = os.getenv("PROFILE_BASE_URL", "http://localhost:8000/media/profiles")
+MEDIA_BASE_URL =  os.getenv("MEDIA_BASE_URL", "http://localhost:8000/media/profiles")
 
 # Google OAuth
 OAUTH_GOOGLE_WEB_CLIENT_ID      = os.getenv("OAUTH_GOOGLE_WEB_CLIENT_ID")
@@ -46,9 +50,22 @@ SMTP_PORT     = os.getenv("SMTP_PORT", "587")
 SMTP_USER     = os.getenv("SMTP_USER")
 SMTP_PASSWORD = os.getenv("SMTP_PASSWORD")
 
+
+#s3
+S3_BUCKET_NAME     = os.getenv("S3_BUCKET_NAME")
+S3_BUCKET_REGION     = os.getenv("S3_BUCKET_REGION")
+S3_BUCKET_ACCESS_KEY     = os.getenv("S3_BUCKET_ACCESS_KEY")
+S3_BUCKET_SECRET_KEY     = os.getenv("S3_BUCKET_SECRET_KEY")
+
 # Token expiry
 ACCESS_TOKEN_EXPIRE_SECONDS = int(os.getenv("ACCESS_TOKEN_EXPIRE_SECONDS", "60"))
 REFRESH_TOKEN_EXPIRE_DAYS   = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "90"))
+
+#Redsi
+REDIS_URL =  os.getenv("REDIS_URL", "redis://doc.example.com")
+
+#Resposne
+API_DOC_BASE_URL = os.getenv("API_DOC_BASE_URL", "https://doc.example.com")
 
 # App
 APP_NAME = os.getenv("APP_NAME", "LTS360")
