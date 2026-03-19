@@ -4,6 +4,7 @@ import random
 from datetime import datetime, timezone
 
 from fastapi import Request, UploadFile
+from schemas.local_job_schemas import GetLocalJobApplicationsRequest, GetLocalJobParams, GetLocalJobsbSchema, GetMeLocalJobsRequest, GuestGetLocalJobsSchema, LocalJobApplicationParam, LocalJobIdParam, SearchSuggestionsRequest
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select, col
 from sqlalchemy import func, or_, and_, case, update, delete
@@ -92,49 +93,19 @@ def _job_response(
     }
 
 
-def _paginate(items: list, last_row, page_size: int, next_token: str | None, payload, distance=None, total_relevance=None) -> dict:
+def _paginate(items: list, last_row, page_size: int, next_token: str = None ) -> dict:
     has_next       = len(items) == page_size and last_row is not None
     next_token_out = encode_cursor({
         "created_at":      str(last_row.created_at),
         "id":              last_row.id,
-        "distance":        float(distance) if distance is not None else None,
-        "total_relevance": float(total_relevance) if total_relevance is not None else None,
+        "distance":        float(getattr(last_row, "distance", None)) if  getattr(last_row, "distance", None) is not None else None,
+        "total_relevance": float( getattr(last_row, "total_relevance", None)) if  getattr(last_row, "total_relevance", None) is not None else None,
     }) if has_next else None
     return {
         "data":           items,
         "next_token":     next_token_out,
-        "previous_token": next_token if payload else None,
+        "previous_token": next_token if next_token else None,
     }
-
-
-# ── Unique ID generators ───────────────────────────────────────────────────────
-
-async def _generate_unique_local_job_id(db: AsyncSession) -> int:
-    while True:
-        id = random.randint(10000000000, 99999999999)
-        result = await db.scalar(select(LocalJob.local_job_id).where(LocalJob.local_job_id == id))
-        if not result:
-            return id
-
-
-async def _generate_unique_application_id(db: AsyncSession) -> int:
-    digit_length = 8
-    while True:
-        min_val = 10 ** (digit_length - 1)
-        max_val = 10 ** digit_length - 1
-        id      = random.randint(min_val, max_val)
-        exists  = await db.scalar(
-            select(LocalJobApplicant.application_id).where(LocalJobApplicant.application_id == id)
-        )
-        if not exists:
-            return id
-        if digit_length < 12:
-            count = await db.scalar(select(func.count()).select_from(LocalJobApplicant))
-            if count >= (max_val - min_val + 1):
-                digit_length += 1
-
-
-# ── Haversine distance expression ─────────────────────────────────────────────
 
 def _haversine(lat: float, lon: float):
     return (
@@ -147,38 +118,31 @@ def _haversine(lat: float, lon: float):
         )
     ).label("distance")
 
-
-# ── Full-text relevance expression ────────────────────────────────────────────
-
 def _relevance(search: str):
     return (
-        func.coalesce(func.match(LocalJob.title,       func.against(search)), 0) +
-        func.coalesce(func.match(LocalJob.description, func.against(search)), 0)
+        func.coalesce(func.match(LocalJob.title,             func.against(search)), 0) +
+        func.coalesce(func.match(LocalJob.long_description,  func.against(search)), 0)
     ).label("total_relevance")
 
-
-# ── Core listing query ────────────────────────────────────────────────────────
-
 async def _query_jobs(
-    db:           AsyncSession,
-    page_size:    int,
-    next_token:   str | None,
-    search:       str | None      = None,
-    user_id:      int | None      = None,
-    user_lat:     float | None    = None,
-    user_lon:     float | None    = None,
-    owner_id:     int | None      = None,
-    radius:       int             = 50,
-) -> tuple[list, list, any]:
+    db:        AsyncSession,
+    user_id:   int,
+    page_size: int,
+    query:     str | None = None,
+    user_lat:  float | None = None,
+    user_lon:  float | None = None,
+    next_token: str | None = None,
+) -> tuple[list, any]:
+
     payload = decode_cursor(next_token) if next_token else None
     has_loc = user_lat is not None and user_lon is not None
 
-    if search and not payload:
+    if query and not payload:
         stmt = insert(LocalJobSearchQuery).values(
-            search_term=search,
+            search_term=query,
             popularity=1,
             last_searched=datetime.now(timezone.utc),
-            search_term_concatenated=search.replace(" ", ""),
+            search_term_concatenated=query.replace(" ", ""),
         )
         stmt = stmt.on_duplicate_key_update(
             popularity=LocalJobSearchQuery.popularity + 1,
@@ -186,20 +150,23 @@ async def _query_jobs(
         )
         await db.execute(stmt)
 
-    cols = [LocalJob, LocalJobLocation, User, ChatInfo]
+    cols = [LocalJob]
+
     if has_loc:
         cols.append(_haversine(user_lat, user_lon))
-    if search:
-        cols.append(_relevance(search))
+    if query:
+        cols.append(_relevance(query))
     if user_id:
         cols.append(UserBookmarkLocalJob)
         cols.append(LocalJobApplicant)
-
     q = (
         select(*cols)
-        .join(LocalJobLocation, LocalJobLocation.local_job_id == LocalJob.local_job_id)
-        .join(User, User.user_id == LocalJob.created_by)
-        .outerjoin(ChatInfo, ChatInfo.user_id == User.user_id)
+        .options(
+            selectinload(LocalJob.user),       
+            selectinload(LocalJob.chat_info).selectinload(ChatInfo.user),
+            selectinload(LocalJob.images),    
+            selectinload(LocalJob.location) 
+        )
     )
 
     if user_id:
@@ -217,27 +184,20 @@ async def _query_jobs(
             )
         )
 
-    if owner_id:
-        q = q.where(LocalJob.created_by == owner_id)
-
-    if search:
-        title_rel = func.coalesce(func.match(LocalJob.title,       func.against(search)), 0)
-        desc_rel  = func.coalesce(func.match(LocalJob.description, func.against(search)), 0)
+    if query:
+        title_rel = func.coalesce(func.match(LocalJob.title,       func.against(query)), 0)
+        desc_rel  = func.coalesce(func.match(LocalJob.description, func.against(query)), 0)
         q = q.having(or_(title_rel > 0, desc_rel > 0))
 
-    if has_loc:
-        dist_expr = _haversine(user_lat, user_lon)
-        q = q.having(dist_expr < radius)
-
     if payload:
-        if has_loc and search:
+        if has_loc and query:
             dist_expr = _haversine(user_lat, user_lon)
-            rel_expr  = _relevance(search)
+            rel_expr  = _relevance(query)
             q = q.having(or_(
                 dist_expr > payload["distance"],
-                and_(dist_expr == payload["distance"], rel_expr  < payload["total_relevance"]),
-                and_(dist_expr == payload["distance"], rel_expr  == payload["total_relevance"], LocalJob.created_at < payload["created_at"]),
-                and_(dist_expr == payload["distance"], rel_expr  == payload["total_relevance"], LocalJob.created_at == payload["created_at"], LocalJob.id > payload["id"]),
+                and_(dist_expr == payload["distance"], rel_expr < payload["total_relevance"]),
+                and_(dist_expr == payload["distance"], rel_expr == payload["total_relevance"], LocalJob.created_at < payload["created_at"]),
+                and_(dist_expr == payload["distance"], rel_expr == payload["total_relevance"], LocalJob.created_at == payload["created_at"], LocalJob.id > payload["id"]),
             ))
         elif has_loc:
             dist_expr = _haversine(user_lat, user_lon)
@@ -246,8 +206,8 @@ async def _query_jobs(
                 and_(dist_expr == payload["distance"], LocalJob.created_at < payload["created_at"]),
                 and_(dist_expr == payload["distance"], LocalJob.created_at == payload["created_at"], LocalJob.id > payload["id"]),
             ))
-        elif search:
-            rel_expr = _relevance(search)
+        elif query:
+            rel_expr = _relevance(query)
             q = q.having(or_(
                 rel_expr < payload["total_relevance"],
                 and_(rel_expr == payload["total_relevance"], LocalJob.created_at < payload["created_at"]),
@@ -261,11 +221,11 @@ async def _query_jobs(
 
     q = q.group_by(LocalJob.local_job_id)
 
-    if has_loc and search:
+    if has_loc and query:
         q = q.order_by("distance ASC", "total_relevance DESC", LocalJob.created_at.desc(), LocalJob.id.asc())
     elif has_loc:
         q = q.order_by("distance ASC", LocalJob.created_at.desc(), LocalJob.id.asc())
-    elif search:
+    elif query:
         q = q.order_by("total_relevance DESC", LocalJob.created_at.desc(), LocalJob.id.asc())
     else:
         q = q.order_by(LocalJob.created_at.desc(), LocalJob.id.asc())
@@ -275,199 +235,133 @@ async def _query_jobs(
     result = await db.execute(q)
     rows   = result.all()
 
-    job_ids = [row[0].local_job_id for row in rows]
-    img_result = await db.execute(
-        select(LocalJobImage)
-        .where(LocalJobImage.local_job_id.in_(job_ids))
-        .order_by(LocalJobImage.created_at.desc())
-    )
-    images_by_id: dict[int, list] = {}
-    for img in img_result.scalars():
-        images_by_id.setdefault(img.local_job_id, []).append(img)
-
-    items     = []
     last_row  = None
-    last_dist = None
-    last_rel  = None
 
-    for i, row in enumerate(rows):
-        job      = row[0]
-        loc      = row[1]
-        owner    = row[2]
-        chat     = row[3]
-        idx      = 4
-        distance = getattr(row, "distance", None) if has_loc else None
-        if has_loc:
-            idx += 1
-        total_relevance = getattr(row, "total_relevance", None) if search else None
-        if search:
-            idx += 1
-        bookmark  = row[idx]     if user_id else None
-        applicant = row[idx + 1] if user_id else None
+    if rows:
+        last_row = rows[-1]
 
-        items.append(_job_response(
-            job, owner,
-            images_by_id.get(job.local_job_id, []),
-            loc, chat,
-            is_bookmarked=bool(bookmark),
-            is_applied=bool(applicant),
-            distance=distance,
-        ))
+    return _paginate(rows, last_row, page_size,next_token if payload else None)
 
-        if i == len(rows) - 1:
-            last_row  = job
-            last_dist = distance
-            last_rel  = total_relevance
-
-    return items, rows, payload, last_row, last_dist, last_rel
-
-
-# ── Get local jobs (authenticated) ────────────────────────────────────────────
-
+    
 async def get_local_jobs(
-    request:     Request,
-    user_id:     int,
-    query_param: str | None,
-    page_size:   int | None,
-    next_token:  str | None,
-    db:          AsyncSession,
-    radius:      int = 50,
+    request: Request,
+    schema: GetLocalJobsbSchema,
+    db: AsyncSession
 ):
     try:
-        page_size = page_size or 20
+        s = schema.s
+        page_size = page_size
+        next_token = schema.next_token
+
+        user_id = request.state.user.user_id    
+        
         loc = await db.scalar(select(UserLocation).where(UserLocation.user_id == user_id))
         lat, lon = (float(loc.latitude), float(loc.longitude)) if loc else (None, None)
 
-        items, rows, payload, last_row, last_dist, last_rel = await _query_jobs(
-            db, page_size, next_token, query_param, user_id, lat, lon, radius=radius
+        data = await _query_jobs(
+            db, page_size, next_token, s, user_id, lat, lon
         )
 
-        if lat and lon and len(items) < page_size and radius < 200:
-            return await get_local_jobs(request, user_id, query_param, page_size, next_token, db, radius + 30)
-
-        return send_json_response(200, "Local jobs fetched", data=_paginate(items, last_row, page_size, next_token, payload, last_dist, last_rel))
+        return send_json_response(200, "Local jobs fetched", data= data)
     except Exception:
         return send_error_response(request, 500, "Internal server error")
-
-
-# ── Guest get local jobs ───────────────────────────────────────────────────────
 
 async def guest_get_local_jobs(
-    request:     Request,
-    query_param: str | None,
-    latitude:    float | None,
-    longitude:   float | None,
-    page_size:   int | None,
-    next_token:  str | None,
-    db:          AsyncSession,
-    radius:      int = 50,
+    request: Request,
+    schema: GuestGetLocalJobsSchema,
+    db: AsyncSession
 ):
     try:
-        page_size = page_size or 20
-
-        items, rows, payload, last_row, last_dist, last_rel = await _query_jobs(
-            db, page_size, next_token, query_param, None, latitude, longitude, radius=radius
-        )
-
-        if latitude and longitude and len(items) < page_size and radius < 200:
-            return await guest_get_local_jobs(request, query_param, latitude, longitude, page_size, next_token, db, radius + 30)
-
-        return send_json_response(200, "Local jobs fetched", data=_paginate(items, last_row, page_size, next_token, payload, last_dist, last_rel))
+    
+        return send_json_response(200, "Local jobs fetched", data= None)
     except Exception:
         return send_error_response(request, 500, "Internal server error")
-
-
-# ── Guest get single local job ─────────────────────────────────────────────────
 
 async def guest_get_local_job(request: Request, local_job_id: int, db: AsyncSession):
     try:
-        result = await db.execute(
-            select(LocalJob, LocalJobLocation, User)
-            .join(LocalJobLocation, LocalJobLocation.local_job_id == LocalJob.local_job_id, isouter=True)
-            .join(User, User.user_id == LocalJob.created_by)
-            .where(LocalJob.local_job_id == local_job_id)
-        )
-        row = result.first()
-        if not row:
-            return send_error_response(request, 404, "Local job not found")
-
-        job, loc, owner = row
-        images = (await db.execute(
-            select(LocalJobImage).where(LocalJobImage.local_job_id == local_job_id).order_by(LocalJobImage.created_at.desc())
-        )).scalars().all()
-
-        return send_json_response(200, "Local job fetched", data=_job_response(job, owner, images, loc, None))
-    except Exception:
-        return send_error_response(request, 500, "Internal server error")
-
-
-# ── Get single local job (authenticated) ──────────────────────────────────────
-
-async def get_local_job(request: Request, user_id: int, local_job_id: int, db: AsyncSession):
-    try:
-        result = await db.execute(
-            select(LocalJob, LocalJobLocation, User, ChatInfo, LocalJobApplicant)
-            .join(LocalJobLocation, LocalJobLocation.local_job_id == LocalJob.local_job_id, isouter=True)
-            .join(User, User.user_id == LocalJob.created_by)
-            .outerjoin(ChatInfo, ChatInfo.user_id == User.user_id)
-            .outerjoin(
-                LocalJobApplicant,
-                and_(
-                    LocalJobApplicant.local_job_id == LocalJob.local_job_id,
-                    LocalJobApplicant.candidate_id == user_id,
-                )
+        job = await db.scalar(
+            select(LocalJob)
+            .options(
+                selectinload(LocalJob.location),
+                selectinload(LocalJob.images),
+                selectinload(LocalJob.applicants) 
             )
             .where(LocalJob.local_job_id == local_job_id)
         )
-        row = result.first()
-        if not row:
-            return send_error_response(request, 404, "Local job not found")
 
-        job, loc, owner, chat, applicant = row
-        images = (await db.execute(
-            select(LocalJobImage).where(LocalJobImage.local_job_id == local_job_id).order_by(LocalJobImage.created_at.desc())
-        )).scalars().all()
+        if not job:
+            return send_error_response(request, 404, "Local job not exist")
 
-        return send_json_response(200, "Local job fetched", data=_job_response(
-            job, owner, images, loc, chat,
-            is_applied=bool(applicant),
+        return send_json_response(200, "Local job retrived", data=_job_response(
+            job,
+            owner=job.created_by,  
+            images=job.images,
+            location=job.location,
+            chat=None, 
         ))
     except Exception:
         return send_error_response(request, 500, "Internal server error")
 
-
-# ── Apply to local job ────────────────────────────────────────────────────────
-
-async def apply_local_job(request: Request, user_id: int, local_job_id: int, db: AsyncSession):
+async def get_local_job(request: Request, params: LocalJobIdParam, db: AsyncSession):
     try:
+        user_id = request.state.suer.user_id
+        local_job_id = params.local_job_id
+        job = await db.scalar(
+            select(LocalJob)
+            .options(
+                selectinload(LocalJob.location),
+                selectinload(LocalJob.images),
+                selectinload(LocalJob.applicants) 
+            )
+            .where(LocalJob.local_job_id == local_job_id)
+        )
+
+        if not job:
+            return send_error_response(request, 404, "Local job not exist")
+        
+        is_applied = await db.scalar(
+        select(LocalJobApplicant)
+        .where(LocalJobApplicant.local_job_id == local_job_id)
+        .where(LocalJobApplicant.candidate_id == str(user_id))
+        ) is not None
+
+        return send_json_response(200, "Local job retrived", data=_job_response(
+            job,
+            owner=job.created_by,  
+            images=job.images,
+            location=job.location,
+            chat=None, 
+            is_applied=bool(is_applied),
+        ))
+    except Exception:
+        return send_error_response(request, 500, "Internal server error")
+
+async def apply_local_job(request: Request, params: LocalJobIdParam, db: AsyncSession):
+    try:
+        user_id = request.state.user_id
+        local_job_id = params.local_job_id
         job = await db.scalar(
             select(LocalJob).where(LocalJob.local_job_id == local_job_id)
         )
         if not job:
             return send_error_response(request, 404, "Local job not exist")
-
-        application_id = await _generate_unique_application_id(db)
-        db.add(LocalJobApplicant(
-            application_id=application_id,
+        applicant= LocalJobApplicant(
             candidate_id=user_id,
             local_job_id=local_job_id,
-        ))
-        await db.flush()
-
+        )
+        db.add(applicant)
+        await db.flush() 
+        
         kafka_key = f"{local_job_id}:{job.created_by}:{user_id}"
         send_local_job_applicant_applied_notification_to_kafka(kafka_key, {
             "user_id":         job.created_by,
             "candidate_id":    user_id,
             "local_job_title": job.title,
-            "application_id":  application_id,
+            "application_id":  applicant.application_id,
         })
-
         return send_json_response(200, "Applied successfully")
     except Exception:
         return send_error_response(request, 500, "Internal server error")
-
-
-# ── Create or update local job ────────────────────────────────────────────────
 
 async def create_or_update_local_job(
     request:          Request,
@@ -587,7 +481,6 @@ async def create_or_update_local_job(
 
         await db.flush()
 
-        # fetch and return
         result = await db.execute(
             select(LocalJob, LocalJobLocation, User)
             .join(LocalJobLocation, LocalJobLocation.local_job_id == LocalJob.local_job_id, isouter=True)
@@ -608,79 +501,61 @@ async def create_or_update_local_job(
         return send_error_response(request, 500, "Internal server error")
 
 
-# ── Get published local jobs (/me) ────────────────────────────────────────────
-
-async def get_published_local_jobs(
-    request:    Request,
-    user_id:    int,
-    page_size:  int | None,
-    next_token: str | None,
-    db:         AsyncSession,
+async def get_me_local_jobs(
+    request: Request,
+    params: GetMeLocalJobsRequest,
+    db: AsyncSession,
 ):
-    try:
-        page_size = page_size or 20
-        payload   = decode_cursor(next_token) if next_token else None
+    user_id = request.state.user_id
+    next_token = params.next_token
+    page_size = page_size or 20
+    payload = decode_cursor(next_token) if next_token else None
 
-        user = await db.scalar(select(User).where(User.user_id == user_id))
-        if not user:
-            return send_error_response(request, 404, "User not exist")
-
-        q = (
-            select(LocalJob, LocalJobLocation, User)
-            .join(LocalJobLocation, LocalJobLocation.local_job_id == LocalJob.local_job_id, isouter=True)
-            .join(User, User.user_id == LocalJob.created_by)
-            .where(LocalJob.created_by == user_id)
+    q = (
+        select(LocalJob)
+        .where(LocalJob.created_by == user_id)
+        .options(
+            selectinload(LocalJob.images),      
+            selectinload(LocalJob.location),   
+            selectinload(LocalJob.user),      
         )
+    )
 
-        if payload:
-            q = q.where(or_(
-                LocalJob.created_at < payload["created_at"],
-                and_(LocalJob.created_at == payload["created_at"], LocalJob.id > payload["id"]),
-            ))
+    if payload:
+        q = q.where(or_(
+            LocalJob.created_at < payload["created_at"],
+            and_(LocalJob.created_at == payload["created_at"], LocalJob.id > payload["id"]),
+        ))
 
-        q = q.group_by(LocalJob.local_job_id).order_by(LocalJob.created_at.desc(), LocalJob.id.asc()).limit(page_size)
+    q = q.order_by(LocalJob.created_at.desc(), LocalJob.id.asc()).limit(page_size)
 
-        result = await db.execute(q)
-        rows   = result.all()
+    jobs = (await db.execute(q)).scalars().all()
 
-        job_ids = [row[0].local_job_id for row in rows]
-        img_result = await db.execute(
-            select(LocalJobImage).where(LocalJobImage.local_job_id.in_(job_ids)).order_by(LocalJobImage.created_at.desc())
-        )
-        images_by_id: dict[int, list] = {}
-        for img in img_result.scalars():
-            images_by_id.setdefault(img.local_job_id, []).append(img)
+    items = [_job_response(job, job.user, job.images, job.location, None) for job in jobs]
+    last_row = jobs[-1] if jobs else None
 
-        items    = []
-        last_row = None
+    return send_json_response(
+        200,
+        "Local jobs retrieved",
+        data=_paginate(items, last_row, page_size, next_token, payload)
+    )
 
-        for i, row in enumerate(rows):
-            job, loc, owner = row
-            items.append(_job_response(job, owner, images_by_id.get(job.local_job_id, []), loc, None))
-            if i == len(rows) - 1:
-                last_row = job
-
-        return send_json_response(200, "Local jobs fetched", data=_paginate(items, last_row, page_size, next_token, payload))
-    except Exception:
-        return send_error_response(request, 500, "Internal server error")
-
-
-# ── Delete local job ──────────────────────────────────────────────────────────
-
-async def delete_local_job(request: Request, user_id: int, local_job_id: int, db: AsyncSession):
+async def delete_local_job(request: Request, params: LocalJobIdParam, db: AsyncSession):
     try:
+        user_id = request.state.user_user_id,
+        local_job_id = params.local_job_id,
+
         job = await db.scalar(
             select(LocalJob).where(LocalJob.local_job_id == local_job_id, LocalJob.created_by == user_id)
         )
         if not job:
-            return send_error_response(request, 404, "Local job not found")
+            return send_error_response(request, 404, "Local job not exist")
 
         media_id = await db.scalar(select(User.media_id).where(User.user_id == user_id))
 
         await db.execute(delete(LocalJobImage).where(LocalJobImage.local_job_id == local_job_id))
         await db.execute(delete(LocalJobLocation).where(LocalJobLocation.local_job_id == local_job_id))
         await db.delete(job)
-        await db.flush()
 
         if media_id:
             await delete_directory_from_s3(f"media/{media_id}/local-jobs/{local_job_id}")
@@ -689,102 +564,95 @@ async def delete_local_job(request: Request, user_id: int, local_job_id: int, db
     except Exception:
         return send_error_response(request, 500, "Internal server error")
 
-
-# ── Get local job applications ────────────────────────────────────────────────
-
 async def get_local_job_applications(
-    request:      Request,
-    user_id:      int,
-    local_job_id: int,
-    page_size:    int | None,
-    next_token:   str | None,
-    db:           AsyncSession,
+    request: Request,
+    params: GetLocalJobApplicationsRequest,
+    db: AsyncSession,
 ):
-    try:
-        page_size = page_size or 20
-        payload   = decode_cursor(next_token) if next_token else None
+    local_job_id = params.local_job_id,
+    page_size = params.page_size
+    next_token =  params.next_token
 
-        job = await db.scalar(select(LocalJob).where(LocalJob.local_job_id == local_job_id))
-        if not job:
-            return send_error_response(request, 404, "Local job not exist")
+    payload   = decode_cursor(next_token) if next_token else None
 
-        q = (
-            select(LocalJobApplicant)
-            .where(LocalJobApplicant.local_job_id == local_job_id)
-            .options(
-                selectinload(LocalJobApplicant.user)
-                .selectinload(User.location)
-            )
-        )
+    job = await db.scalar(select(LocalJob).where(LocalJob.local_job_id == local_job_id))
+    if not job:
+        return send_error_response(request, 404, "Local job not exist")
 
-        if payload:
-            q = q.where(or_(
-                LocalJobApplicant.is_reviewed > payload["is_reviewed"],
-                and_(LocalJobApplicant.is_reviewed == payload["is_reviewed"], LocalJobApplicant.reviewed_at < payload["reviewed_at"]),
-                and_(LocalJobApplicant.is_reviewed == payload["is_reviewed"], LocalJobApplicant.reviewed_at == payload["reviewed_at"], LocalJobApplicant.id > payload["id"]),
-            ))
+    q = (
+        select(LocalJobApplicant)
+        .where(LocalJobApplicant.local_job_id == local_job_id)
+        .options(selectinload(LocalJobApplicant.user).selectinload(User.location))
+    )
 
-        q = q.group_by(LocalJobApplicant.application_id).order_by(
-            LocalJobApplicant.is_reviewed.asc(),
-            LocalJobApplicant.reviewed_at.desc(),
-            LocalJobApplicant.id.asc(),
-        ).limit(page_size)
+    if payload:
+        q = q.where(or_(
+            LocalJobApplicant.is_reviewed > payload["is_reviewed"],
+            and_(LocalJobApplicant.is_reviewed == payload["is_reviewed"],
+                 LocalJobApplicant.reviewed_at < payload["reviewed_at"]),
+            and_(LocalJobApplicant.is_reviewed == payload["is_reviewed"],
+                 LocalJobApplicant.reviewed_at == payload["reviewed_at"],
+                 LocalJobApplicant.id > payload["id"]),
+        ))
 
-        result = await db.execute(q)
-        rows   = result.all()
+    q = q.order_by(
+        LocalJobApplicant.is_reviewed.asc(),
+        LocalJobApplicant.reviewed_at.desc(),
+        LocalJobApplicant.id.asc(),
+    ).limit(page_size)
 
-        items    = []
-        last_row = None
+    rows = (await db.execute(q)).scalars().all()
 
-        for i, row in enumerate(rows):
-            applicant, u, ul = row
-            items.append({
-                "application_id": applicant.application_id,
-                "applied_at":     applicant.applied_at,
-                "is_reviewed":    bool(applicant.is_reviewed),
-                "contact_info": {
-                    "email":             u.email,
-                    "phone_country_code": u.phone_country_code,
-                    "phone_number":       u.phone_number,
-                },
-                "user": {
-                    "user_id":            u.user_id,
-                    "first_name":         u.first_name,
-                    "last_name":          u.last_name,
-                    "email":              u.email,
-                    "is_email_verified":  bool(u.is_email_verified),
-                    "phone_country_code": u.phone_country_code,
-                    "phone_number":       u.phone_number,
-                    "is_phone_verified":  bool(u.is_phone_verified),
-                    "profile_pic_url":    _fmt_url(PROFILE_BASE_URL, u.profile_pic_url),
-                    "profile_pic_url_96x96": _fmt_url(PROFILE_BASE_URL, u.profile_pic_url_96x96),
-                    "geo":                ul.geo if ul else None,
-                    "joined_at":          str(u.created_at.year) if u.created_at else None,
-                },
-            })
-            if i == len(rows) - 1:
-                last_row = applicant
+    items = []
+    last_row = None
 
-        has_next       = len(items) == page_size and last_row is not None
-        next_token_out = encode_cursor({
-            "is_reviewed": last_row.is_reviewed,
-            "reviewed_at": str(last_row.reviewed_at),
-            "id":          last_row.id,
-        }) if has_next else None
+    for i, applicant in enumerate(rows):
+        u  = applicant.user
+        ul = u.location if u else None
 
-        return send_json_response(200, "Applications fetched", data={
-            "data":           items,
-            "next_token":     next_token_out,
-            "previous_token": next_token if payload else None,
+        items.append({
+            "application_id": applicant.application_id,
+            "applied_at": applicant.applied_at,
+            "is_reviewed": bool(applicant.is_reviewed),
+            "contact_info": {
+                "email": u.email,
+                "phone_country_code": u.phone_country_code,
+                "phone_number": u.phone_number,
+            } if u else None,
+            "user": {
+                "user_id": u.user_id,
+                "first_name": u.first_name,
+                "last_name": u.last_name,
+                "email": u.email,
+                "is_email_verified": bool(u.is_email_verified),
+                "phone_country_code": u.phone_country_code,
+                "phone_number": u.phone_number,
+                "is_phone_verified": bool(u.is_phone_verified),
+                "profile_pic_url": _fmt_url(PROFILE_BASE_URL, u.profile_pic_url),
+                "profile_pic_url_96x96": _fmt_url(PROFILE_BASE_URL, u.profile_pic_url_96x96),
+                "geo": ul.geo if ul else None,
+                "joined_at": str(u.created_at.year) if u.created_at else None,
+            } if u else None,
         })
-    except Exception:
-        return send_error_response(request, 500, "Internal server error")
+        last_row = applicant
 
+    next_token_out = encode_cursor({
+        "is_reviewed": last_row.is_reviewed,
+        "reviewed_at": str(last_row.reviewed_at),
+        "id": last_row.id,
+    }) if len(items) == page_size and last_row else None
 
-# ── Mark / Unmark reviewed ────────────────────────────────────────────────────
+    return send_json_response(200, "Applications fetched", data={
+        "data": items,
+        "next_token": next_token_out,
+        "previous_token": next_token if payload else None,
+    })
 
-async def mark_as_reviewed(request: Request, user_id: int, local_job_id: int, application_id: int, db: AsyncSession):
+async def mark_as_reviewed(request: Request, params: LocalJobApplicationParam, db: AsyncSession):
     try:
+        user_id = request.state.user.user_id
+        local_job_id = params.user_id
+        application_id = params.application_id
         job = await db.scalar(
             select(LocalJob).where(LocalJob.local_job_id == local_job_id, LocalJob.created_by == user_id)
         )
@@ -800,14 +668,17 @@ async def mark_as_reviewed(request: Request, user_id: int, local_job_id: int, ap
     except Exception:
         return send_error_response(request, 500, "Internal server error")
 
-
-async def unmark_as_reviewed(request: Request, user_id: int, local_job_id: int, application_id: int, db: AsyncSession):
+async def unmark_as_reviewed(request: Request, params: LocalJobApplicationParam, db: AsyncSession):
     try:
+        user_id = request.state.user.user_id
+        local_job_id = params.user_id
+        application_id = params.application_id
+        
         job = await db.scalar(
             select(LocalJob).where(LocalJob.local_job_id == local_job_id, LocalJob.created_by == user_id)
         )
         if not job:
-            return send_error_response(request, 404, "Local job not found")
+            return send_error_response(request, 404, "Local job not exist")
 
         await db.execute(
             update(LocalJobApplicant)
@@ -817,21 +688,20 @@ async def unmark_as_reviewed(request: Request, user_id: int, local_job_id: int, 
         return send_json_response(200, "Unmarked as reviewed")
     except Exception:
         return send_error_response(request, 500, "Internal server error")
-
-
-# ── Bookmark / Unbookmark ─────────────────────────────────────────────────────
-
-async def bookmark_local_job(request: Request, user_id: int, local_job_id: int, db: AsyncSession):
+    
+async def bookmark_local_job(request: Request, params:LocalJobIdParam, db: AsyncSession):
     try:
+        user_id = request.state.user.user_id
+        local_job_id = params.user_id
         db.add(UserBookmarkLocalJob(user_id=user_id, local_job_id=local_job_id))
-        await db.flush()
         return send_json_response(200, "Bookmarked")
     except Exception:
         return send_error_response(request, 500, "Internal server error")
 
-
-async def unbookmark_local_job(request: Request, user_id: int, local_job_id: int, db: AsyncSession):
+async def unbookmark_local_job(request: Request, params: LocalJobIdParam, db: AsyncSession):
     try:
+        user_id = request.state.user.user_id
+        local_job_id = params.user_id
         bookmark = await db.scalar(
             select(UserBookmarkLocalJob).where(
                 UserBookmarkLocalJob.user_id == user_id,
@@ -839,14 +709,15 @@ async def unbookmark_local_job(request: Request, user_id: int, local_job_id: int
             )
         )
         if not bookmark:
-            return send_error_response(request, 404, "Bookmark not found")
+            return send_error_response(request, 404, "Failed to remove bookmark")
         await db.delete(bookmark)
-        return send_json_response(200, "Unbookmarked")
+        return send_json_response(200, "Bookmark removed")
     except Exception:
         return send_error_response(request, 500, "Internal server error")
     
-async def local_jobs_search_queries(request: Request, query: str, db: AsyncSession):
+async def local_jobs_search_queries(request: Request, params: SearchSuggestionsRequest, db: AsyncSession):
     try:
+        query = params.query
         clean = query.strip().lower()
         words = clean.split()
         result = await db.execute(
@@ -860,6 +731,6 @@ async def local_jobs_search_queries(request: Request, query: str, db: AsyncSessi
             .order_by(LocalJobSearchQuery.popularity.desc())
             .limit(10)
         )
-        return send_json_response(200, "Suggestions fetched", data=[r.search_term for r in result.scalars()])
+        return send_json_response(200, "Suggestions retrieved", data=[r.search_term for r in result.scalars()])
     except Exception:
         return send_error_response(request, 500, "Internal server error")

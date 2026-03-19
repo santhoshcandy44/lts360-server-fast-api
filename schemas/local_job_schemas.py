@@ -14,8 +14,7 @@ VALID_INDIAN_STATES    = [
     "Telangana", "Tripura", "Uttar Pradesh", "Uttarakhand", "West Bengal"
 ]
 
-
-class GuestGetLocalJobsRequest(BaseModel):
+class GuestGetLocalJobsSchema(BaseModel):
     s:          Optional[str]   = None
     latitude:   Optional[float] = None
     longitude:  Optional[float] = None
@@ -48,8 +47,7 @@ class GuestGetLocalJobsRequest(BaseModel):
             raise ValueError("Page size must be a positive integer")
         return v
 
-
-class GetLocalJobsRequest(BaseModel):
+class GetLocalJobsbSchema(BaseModel):
     s:          Optional[str] = None
     page_size:  Optional[int] = None
     next_token: Optional[str] = None
@@ -67,40 +65,6 @@ class GetLocalJobsRequest(BaseModel):
         if v is not None and v <= 0:
             raise ValueError("Page size must be a positive integer")
         return v
-
-
-class GetMeLocalJobsRequest(BaseModel):
-    page_size:  Optional[int] = None
-    next_token: Optional[str] = None
-
-    @field_validator("page_size")
-    def validate_page_size(cls, v):
-        if v is not None and v <= 0:
-            raise ValueError("Page size must be a positive integer")
-        return v
-
-
-class GetLocalJobApplicationsRequest(BaseModel):
-    page_size:  Optional[int] = None
-    next_token: Optional[str] = None
-
-    @field_validator("page_size")
-    def validate_page_size(cls, v):
-        if v is not None and v <= 0:
-            raise ValueError("Page size must be a positive integer")
-        return v
-
-
-class SearchSuggestionsRequest(BaseModel):
-    query: str
-
-    @field_validator("query")
-    def validate_query(cls, v):
-        v = v.strip()
-        if not v:
-            raise ValueError("Search query cannot be empty")
-        return v
-
 
 class CreateOrUpdateLocalJobRequest(BaseModel):
     local_job_id:     int
@@ -222,7 +186,51 @@ class CreateOrUpdateLocalJobRequest(BaseModel):
         if self.country == "IN" and self.state not in VALID_INDIAN_STATES:
             raise ValueError("Invalid state for India")
         return self
-  
+
+class GetMeLocalJobsRequest(BaseModel):
+    page_size:  Optional[int] = None
+    next_token: Optional[str] = None
+
+    @field_validator("page_size")
+    def validate_page_size(cls, v):
+        if v is not None and v <= 0:
+            raise ValueError("Page size must be a positive integer")
+        return v
+      
+class GetLocalJobApplicationsRequest(BaseModel):
+    local_job_id:   int
+    page_size:  Optional[int] = None
+    next_token: Optional[str] = None
+
+    
+    @field_validator("local_job_id")
+    def validate_local_job_id(cls, v):
+        if v <= 0:
+            raise ValueError("Invalid local job id")
+        return v
+
+    @field_validator("page_size")
+    def validate_page_size(cls, v):
+        if v is not None and v <= 0:
+            raise ValueError("Page size must be a positive integer")
+        return v
+
+class LocalJobApplicationParam(BaseModel):
+    local_job_id:   int
+    application_id: int
+
+    @field_validator("local_job_id")
+    def validate_local_job_id(cls, v):
+        if v <= 0:
+            raise ValueError("Invalid local job id")
+        return v
+
+    @field_validator("application_id")
+    def validate_application_id(cls, v):
+        if v <= 0:
+            raise ValueError("Invalid application id")
+        return v
+
 class LocalJobIdParam(BaseModel):
     local_job_id: int
 
@@ -231,3 +239,13 @@ class LocalJobIdParam(BaseModel):
         if v <= 0:
             raise ValueError("Invalid local job id")
         return v    
+
+class SearchSuggestionsRequest(BaseModel):
+    query: str
+
+    @field_validator("query")
+    def validate_query(cls, v):
+        v = v.strip()
+        if not v:
+            raise ValueError("Search query cannot be empty")
+        return v
