@@ -1,8 +1,21 @@
-# routers/local_jobs.py
-from fastapi import APIRouter, Depends, Request, Query, UploadFile, File
-from typing import Optional, List
+from database import get_db
 from middleware.auth_middleware import authenticate_token
-from schemas.local_job_schemas import CreateLocalJobRequest
+
+from fastapi import APIRouter, Depends, Request, Path, UploadFile, File, Form, HTTPException
+from schemas.local_job_schemas import LocalJobIdParam
+from sqlalchemy.ext.asyncio import AsyncSession
+from typing import Optional, List
+
+from schemas.local_jobs_schemas import (
+    GuestGetLocalJobsRequest,
+    GetLocalJobsRequest,
+    GetMeLocalJobsRequest,
+    GetLocalJobApplicationsRequest,
+    CreateOrUpdateLocalJobRequest,
+    SearchSuggestionsRequest,
+)
+
+from controllers import local_jobs_controller
 
 router = APIRouter(
     prefix="/local-jobs",
@@ -10,149 +23,157 @@ router = APIRouter(
 )
 
 
-# ── Guest routes (no auth) ────────────────────────────────────────────────────
-
 @router.get("/guest")
 async def guest_get_local_jobs(
-    request:   Request,
-    s:         Optional[str]   = Query(default=None, max_length=100),
-    latitude:  Optional[float] = Query(default=None, ge=-90,  le=90),
-    longitude: Optional[float] = Query(default=None, ge=-180, le=180),
-    page_size: Optional[int]   = Query(default=None),
-    next_token: Optional[str]  = Query(default=None),
+    request: Request,
+    params:  GuestGetLocalJobsRequest = Depends(),
+    db:      AsyncSession = Depends(get_db),
 ):
-    pass
+    return await local_jobs_controller.guest_get_local_jobs(request, params, db)
 
 
 @router.get("/guest/search-suggestions")
 async def guest_local_jobs_search_suggestion(
     request: Request,
-    query:   str = Query(..., min_length=1),
+    params:  SearchSuggestionsRequest = Depends(),
+    db:      AsyncSession = Depends(get_db),
 ):
-    pass
-
-
-@router.get("/guest/{local_job_id}")
-async def guest_get_local_job(
-    local_job_id: int,
-    request:      Request,
-):
-    pass
-
-
-# ── Protected routes ──────────────────────────────────────────────────────────
-
-@router.get("/search-suggestions")
-async def local_jobs_search_suggestion(
-    request:      Request,
-    query:        str = Query(..., min_length=1),
-    current_user=Depends(authenticate_token),
-):
-    pass
+    return await local_jobs_controller.local_jobs_search_suggestion(request, params, db)
 
 
 @router.get("/me")
 async def get_me_local_jobs(
-    request:    Request,
-    page_size:  Optional[int] = Query(default=None),
-    next_token: Optional[str] = Query(default=None),
-    current_user=Depends(authenticate_token),
+    request: Request,
+    params:  GetMeLocalJobsRequest = Depends(),
+    db:      AsyncSession = Depends(get_db),
+    _:       None = Depends(authenticate_token),
 ):
-    pass
+    return await local_jobs_controller.get_me_local_jobs(request, params, db)
+
+
+@router.get("/search-suggestions")
+async def local_jobs_search_suggestion(
+    request: Request,
+    params:  SearchSuggestionsRequest = Depends(),
+    db:      AsyncSession = Depends(get_db),
+    _:       None = Depends(authenticate_token),
+):
+    return await local_jobs_controller.local_jobs_search_suggestion(request, params, db)
 
 
 @router.get("/")
 async def get_local_jobs(
-    request:    Request,
-    s:          Optional[str] = Query(default=None, max_length=100),
-    page_size:  Optional[int] = Query(default=None),
-    next_token: Optional[str] = Query(default=None),
-    current_user=Depends(authenticate_token),
+    request: Request,
+    params:  GetLocalJobsRequest = Depends(),
+    db:      AsyncSession = Depends(get_db),
+    _:       None = Depends(authenticate_token),
 ):
-    pass
+    return await local_jobs_controller.get_local_jobs(request, params, db)
+
+
+@router.get("/guest/{local_job_id}")
+async def guest_get_local_job(
+    request:      Request,
+    local_job_id: int = Path(..., ge=1),
+    db:           AsyncSession = Depends(get_db),
+):
+    return await local_jobs_controller.guest_get_local_job(request, local_job_id, db)
 
 
 @router.get("/{local_job_id}")
 async def get_local_job(
-    local_job_id: int,
     request:      Request,
-    current_user=Depends(authenticate_token),
+    local_job_id: int = Path(..., ge=1),
+    db:           AsyncSession = Depends(get_db),
+    _:            None = Depends(authenticate_token),
 ):
-    pass
-
-
-@router.post("/")
-async def create_or_update_local_job(
-    request:      Request,
-    body:         CreateLocalJobRequest,
-    images:       Optional[List[UploadFile]] = File(default=None),
-    current_user=Depends(authenticate_token),
-):
-    pass
+    return await local_jobs_controller.get_local_job(request, local_job_id, db)
 
 
 @router.post("/{local_job_id}/apply")
 async def apply_local_job(
-    local_job_id: int,
     request:      Request,
-    current_user=Depends(authenticate_token),
+    local_job_id: int = Path(..., ge=1),
+    db:           AsyncSession = Depends(get_db),
+    _:            None = Depends(authenticate_token),
 ):
-    pass
+    return await local_jobs_controller.apply_local_job(request, local_job_id, db)
+
+
+@router.post("/")
+async def create_or_update_local_job(
+    request: Request,
+    body:    CreateOrUpdateLocalJobRequest = Depends(),
+    images:  Optional[List[UploadFile]]    = File(default=None),
+    db:      AsyncSession                  = Depends(get_db),
+    _:       None                          = Depends(authenticate_token),
+):
+    has_new_images  = images and len(images) > 0
+    has_kept_images = body.keep_image_ids and len(body.keep_image_ids) > 0
+    if not has_new_images and not has_kept_images:
+        raise HTTPException(status_code=422, detail="At least 1 image is required")
+
+    return await local_jobs_controller.create_or_update_local_job(request, body, images, db)
 
 
 @router.delete("/{local_job_id}")
 async def delete_local_job(
-    local_job_id: int,
     request:      Request,
-    current_user=Depends(authenticate_token),
+    local_job_id: int = Path(..., ge=1),
+    db:           AsyncSession = Depends(get_db),
+    _:            None = Depends(authenticate_token),
 ):
-    pass
+    return await local_jobs_controller.delete_local_job(request, local_job_id, db)
 
 
 @router.get("/{local_job_id}/applications")
 async def get_local_job_applications(
-    local_job_id: int,
     request:      Request,
-    page_size:    Optional[int] = Query(default=None),
-    next_token:   Optional[str] = Query(default=None),
-    current_user=Depends(authenticate_token),
+    local_job_id: int = Path(..., ge=1),
+    params:       GetLocalJobApplicationsRequest = Depends(),
+    db:           AsyncSession = Depends(get_db),
+    _:            None = Depends(authenticate_token),
 ):
-    pass
+    return await local_jobs_controller.get_local_job_applications(request, local_job_id, params, db)
 
 
 @router.post("/{local_job_id}/applications/{application_id}/review")
 async def mark_as_reviewed_local_job(
-    local_job_id:   int,
-    application_id: int,
     request:        Request,
-    current_user=Depends(authenticate_token),
+    local_job_id:   int = Path(..., ge=1),
+    application_id: int = Path(..., ge=1),
+    db:             AsyncSession = Depends(get_db),
+    _:              None = Depends(authenticate_token),
 ):
-    pass
+    return await local_jobs_controller.mark_as_reviewed_local_job(request, local_job_id, application_id, db)
 
 
 @router.delete("/{local_job_id}/applications/{application_id}/review")
 async def unmark_reviewed_local_job(
-    local_job_id:   int,
-    application_id: int,
     request:        Request,
-    current_user=Depends(authenticate_token),
+    local_job_id:   int = Path(..., ge=1),
+    application_id: int = Path(..., ge=1),
+    db:             AsyncSession = Depends(get_db),
+    _:              None = Depends(authenticate_token),
 ):
-    pass
+    return await local_jobs_controller.unmark_reviewed_local_job(request, local_job_id, application_id, db)
 
 
 @router.post("/{local_job_id}/bookmark")
 async def bookmark_local_job(
-    local_job_id: int,
-    request:      Request,
-    current_user=Depends(authenticate_token),
+    request: Request,
+    params:  LocalJobIdParam = Depends(),
+    db:      AsyncSession = Depends(get_db),
+    _:       None = Depends(authenticate_token),
 ):
-    pass
+    return await local_jobs_controller.bookmark_local_job(request, params.local_job_id, db)
 
 
 @router.delete("/{local_job_id}/bookmark")
 async def unbookmark_local_job(
-    local_job_id: int,
-    request:      Request,
-    current_user=Depends(authenticate_token),
+    request: Request,
+    params:  LocalJobIdParam = Depends(),
+    db:      AsyncSession = Depends(get_db),
+    _:       None = Depends(authenticate_token),
 ):
-    pass
+    return await local_jobs_controller.unbookmark_local_job(request, params.local_job_id, db)

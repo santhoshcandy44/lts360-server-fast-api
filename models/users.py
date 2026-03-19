@@ -5,7 +5,8 @@ import string
 from decimal import Decimal
 from typing import Optional
 
-from sqlmodel import SQLModel, Field, Column
+from models.local_jobs import LocalJobApplicant
+from sqlmodel import SQLModel, Field, Column, Relationship
 from sqlalchemy import Column, BigInteger, ForeignKey, UniqueConstraint, Numeric, Enum as SAEnum, UniqueConstraint, event
 from sqlalchemy.orm import Session
 
@@ -51,6 +52,14 @@ class User(SQLModel, table=True):
     created_at:            datetime       = Field(default_factory=timezone.utc)
     updated_at:            datetime       = Field(default_factory=timezone.utc)
 
+    location: "UserLocation" = Relationship(
+        back_populates="user"
+    )
+
+    local_job_applications: list["LocalJobApplicant"] = Relationship(
+        back_populates="user"
+    )
+
 class UserLocation(SQLModel, table=True):
     __tablename__ = "user_locations"
  
@@ -66,6 +75,9 @@ class UserLocation(SQLModel, table=True):
                               )
     created_at:    datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at:    datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+    user: User = Relationship(back_populates="location")
+
  
 class UserBoard(SQLModel, table=True):
     __tablename__ = "user_boards"

@@ -4,7 +4,8 @@ from typing import Optional
 from datetime import datetime, timezone
 import string
 
-from sqlmodel import SQLModel, Field
+from models.users import User
+from sqlmodel import SQLModel, Field, Relationship
 from sqlalchemy import Column, BigInteger, ForeignKey, Numeric, Enum as SAEnum, event
 from sqlalchemy.orm import Session
 
@@ -66,12 +67,6 @@ class LocalJobLocation(SQLModel, table=True):
                                    )
     created_at:    datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at:    datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
- 
-
- # models/local_jobs/local_job_search_queries.py
-from sqlmodel import SQLModel, Field
-from typing import Optional
-from datetime import datetime, timezone
 
 
 class LocalJobSearchQuery(SQLModel, table=True):
@@ -97,6 +92,8 @@ class LocalJobApplicant(SQLModel, table=True):
     reviewed_at:    Optional[datetime] = Field(default=None)
     created_at:     datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at:     datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+    user: User = Relationship(back_populates="local_job_applications")
 
 def _generate_short_code() -> str:
     chars = string.ascii_letters + string.digits 

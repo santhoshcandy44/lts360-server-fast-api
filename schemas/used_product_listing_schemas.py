@@ -1,8 +1,11 @@
-# schemas/used_product_schemas.py
 from pydantic import BaseModel, field_validator, model_validator
 from typing import Optional, List, Literal
+from fastapi import Form
+import json
 
-VALID_STATES_IN = [
+
+VALID_COUNTRIES     = ['IN', 'USA']
+VALID_INDIAN_STATES = [
     "Andaman and Nicobar Islands", "Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar",
     "Chandigarh", "Chhattisgarh", "Dadra and Nagar Haveli and Daman and Diu", "Delhi", "Goa",
     "Gujarat", "Haryana", "Himachal Pradesh", "Jammu and Kashmir", "Jharkhand", "Karnataka",
@@ -12,54 +15,220 @@ VALID_STATES_IN = [
 ]
 
 
-class UsedProductLocationSchema(BaseModel):
-    latitude:  float
-    longitude: float
+class GuestGetUsedProductListingsRequest(BaseModel):
+    s:              Optional[str]   = None
+    latitude:       Optional[float] = None
+    longitude:      Optional[float] = None
+    page_size:      Optional[int]   = None
+    next_token:     Optional[str]   = None
+    previous_token: Optional[str]   = None
+
+    @field_validator("s")
+    def validate_s(cls, v):
+        if v is not None:
+            v = v.strip()
+            if len(v) > 100:
+                raise ValueError("Search must be between 0 and 100 characters")
+        return v
 
     @field_validator("latitude")
     def validate_latitude(cls, v):
-        if not -90 <= v <= 90:
+        if v is not None and not -90 <= v <= 90:
             raise ValueError("Latitude must be between -90 and 90")
         return v
 
     @field_validator("longitude")
     def validate_longitude(cls, v):
-        if not -180 <= v <= 180:
+        if v is not None and not -180 <= v <= 180:
             raise ValueError("Longitude must be between -180 and 180")
         return v
 
+    @field_validator("page_size")
+    def validate_page_size(cls, v):
+        if v is not None and v <= 0:
+            raise ValueError("Page size must be a positive integer")
+        return v
 
-class CreateUsedProductListingRequest(BaseModel):
-    name:            str
-    description:     str
-    country:         Literal["IN", "USA"]
-    state:           str
-    price:           float
-    price_unit:      Literal["INR", "USD"]
-    location:        UsedProductLocationSchema
-    keep_image_ids:  Optional[List[int]] = None
+
+class GetUsedProductListingsRequest(BaseModel):
+    s:              Optional[str] = None
+    page_size:      Optional[int] = None
+    next_token:     Optional[str] = None
+    previous_token: Optional[str] = None
+
+    @field_validator("s")
+    def validate_s(cls, v):
+        if v is not None:
+            v = v.strip()
+            if len(v) > 100:
+                raise ValueError("Search must be between 0 and 100 characters")
+        return v
+
+    @field_validator("page_size")
+    def validate_page_size(cls, v):
+        if v is not None and v <= 0:
+            raise ValueError("Page size must be a positive integer")
+        return v
+
+
+class GetUsedProductListingsByUserIdRequest(BaseModel):
+    page_size:      Optional[int] = None
+    next_token:     Optional[str] = None
+    previous_token: Optional[str] = None
+
+    @field_validator("page_size")
+    def validate_page_size(cls, v):
+        if v is not None and v <= 0:
+            raise ValueError("Page size must be a positive integer")
+        return v
+
+
+class GetUserProfileRequest(BaseModel):
+    page_size: Optional[int] = None
+
+    @field_validator("page_size")
+    def validate_page_size(cls, v):
+        if v is not None and v <= 0:
+            raise ValueError("Page size must be a positive integer")
+        return v
+
+
+class GetMeUsedProductListingsRequest(BaseModel):
+    page_size:      Optional[int] = None
+    next_token:     Optional[str] = None
+    previous_token: Optional[str] = None
+
+    @field_validator("page_size")
+    def validate_page_size(cls, v):
+        if v is not None and v <= 0:
+            raise ValueError("Page size must be a positive integer")
+        return v
+
+
+class UsedProductSearchSuggestionsRequest(BaseModel):
+    query: str
+
+    @field_validator("query")
+    def validate_query(cls, v):
+        v = v.strip()
+        if not v:
+            raise ValueError("Search query cannot be empty")
+        return v
+
+
+class UsedProductListingIdParam(BaseModel):
+    used_product_listing_id: int
+
+    @field_validator("used_product_listing_id")
+    def validate_id(cls, v):
+        if v <= 0:
+            raise ValueError("Invalid used product listing id")
+        return v
+
+
+class UserIdParam(BaseModel):
+    user_id: int
+
+    @field_validator("user_id")
+    def validate_user_id(cls, v):
+        if v <= 0:
+            raise ValueError("Invalid user id")
+        return v
+
+
+class CreateOrUpdateUsedProductListingRequest(BaseModel):
+    used_product_listing_id: int
+    name:                    str
+    description:             str
+    country:                 str
+    state:                   str
+    keep_image_ids:          Optional[List[int]] = None
+    price:                   float
+    price_unit:              Literal["INR", "USD"]
+    location:                str
 
     @field_validator("name")
     def validate_name(cls, v):
+        v = v.strip()
+        if not v:
+            raise ValueError("Name is required")
         if not 1 <= len(v) <= 100:
-            raise ValueError("Name must be between 1 and 100 characters")
-        return v.strip()
+            raise ValueError("Name must be between 1 and 100 characters long")
+        return v
 
     @field_validator("description")
     def validate_description(cls, v):
+        v = v.strip()
+        if not v:
+            raise ValueError("Description is required")
         if not 1 <= len(v) <= 5000:
-            raise ValueError("Description must be between 1 and 5000 characters")
-        return v.strip()
+            raise ValueError("Description must be between 1 and 5000 characters long")
+        return v
+
+    @field_validator("country")
+    def validate_country(cls, v):
+        if v not in VALID_COUNTRIES:
+            raise ValueError("Invalid country")
+        return v
 
     @field_validator("price")
     def validate_price(cls, v):
         if v < 0:
-            raise ValueError("Price must be greater than or equal to 0")
+            raise ValueError("Price must be >= 0")
         return v
 
-    @field_validator("state")
-    def validate_state(cls, v, info):
-        country = info.data.get("country")
-        if country == "IN" and v not in VALID_STATES_IN:
-            raise ValueError("Invalid state for India")
+    @field_validator("keep_image_ids", mode="before")
+    def validate_keep_image_ids(cls, v):
+        if v is None:
+            return None
+        if not isinstance(v, list):
+            v = [v]
+        return [int(i) for i in v]
+
+    @field_validator("location")
+    def validate_location(cls, v):
+        try:
+            parsed = json.loads(v)
+        except Exception:
+            raise ValueError("Location must be a valid JSON object")
+        if not isinstance(parsed, dict):
+            raise ValueError("Location must be a valid JSON object")
+        lat = parsed.get("latitude")
+        lng = parsed.get("longitude")
+        if lat is None or lng is None:
+            raise ValueError("Location must have latitude and longitude")
+        if not -90 <= float(lat) <= 90:
+            raise ValueError("Latitude must be between -90 and 90")
+        if not -180 <= float(lng) <= 180:
+            raise ValueError("Longitude must be between -180 and 180")
         return v
+
+    @model_validator(mode="after")
+    def validate_state(self):
+        if self.country == "IN" and self.state not in VALID_INDIAN_STATES:
+            raise ValueError("Invalid state for India")
+        return self
+
+
+async def create_or_update_used_product_listing_form(
+    used_product_listing_id: int                  = Form(...),
+    name:                    str                  = Form(...),
+    description:             str                  = Form(...),
+    country:                 str                  = Form(...),
+    state:                   str                  = Form(...),
+    price:                   float                = Form(...),
+    price_unit:              str                  = Form(...),
+    location:                str                  = Form(...),
+    keep_image_ids:          Optional[List[int]]  = Form(default=None),
+) -> CreateOrUpdateUsedProductListingRequest:
+    return CreateOrUpdateUsedProductListingRequest(
+        used_product_listing_id = used_product_listing_id,
+        name                    = name,
+        description             = description,
+        country                 = country,
+        state                   = state,
+        price                   = price,
+        price_unit              = price_unit,
+        location                = location,
+        keep_image_ids          = keep_image_ids,
+    )

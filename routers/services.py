@@ -1,15 +1,31 @@
-# routers/services.py
-from fastapi import APIRouter, Depends, Request, Query, UploadFile, File
-from typing import Optional, List
+from database import get_db
 from middleware.auth_middleware import authenticate_token
-from schemas.service_schemas import (
+
+from fastapi import APIRouter, Depends, Request, UploadFile, File, HTTPException
+from sqlalchemy.ext.asyncio import AsyncSession
+from typing import Optional, List
+
+from schemas.services_schemas import (
+    GuestGetServicesRequest,
+    GetServicesRequest,
+    GetMeServicesRequest,
+    GetUserProfileServicesRequest,
+    GetServicesByUserIdRequest,
+    SearchSuggestionsRequest,
+    ServiceIdParam,
+    UserIdParam,
     CreateServiceRequest,
+    create_service_form,
     UpdateServiceInfoRequest,
-    UpdateServicePlansRequest,
+    UpdateServiceThumbnailRequest,
     UpdateServiceImagesRequest,
+    update_service_images_form,
+    UpdateServicePlansRequest,
     UpdateServiceLocationRequest,
     UpdateIndustriesRequest,
 )
+
+from controllers import services_controller
 
 router = APIRouter(
     prefix="/services",
@@ -17,229 +33,261 @@ router = APIRouter(
 )
 
 
-# ── Guest routes ──────────────────────────────────────────────────────────────
-
-@router.get("/guest")
-async def guest_get_services(
-    request:        Request,
-    s:              Optional[str]   = Query(default=None, max_length=100),
-    latitude:       Optional[float] = Query(default=None, ge=-90,  le=90),
-    longitude:      Optional[float] = Query(default=None, ge=-180, le=180),
-    industries:     Optional[List[int]] = Query(default=None),
-    page_size:      Optional[int]   = Query(default=None),
-    next_token:     Optional[str]   = Query(default=None),
-    previous_token: Optional[str]   = Query(default=None),
-):
-    pass
-
+# ──────────────────────────────────────────────
+# Static guest routes  (must come before /{service_id})
+# ──────────────────────────────────────────────
 
 @router.get("/guest/search-suggestions")
 async def guest_search_suggestions(
     request: Request,
-    query:   str = Query(..., min_length=1),
+    params:  SearchSuggestionsRequest = Depends(),
+    db:      AsyncSession = Depends(get_db),
 ):
-    pass
+    return await services_controller.search_suggestions(request, params, db)
 
 
 @router.get("/guest/industries")
-async def guest_get_industries(request: Request):
-    pass
+async def guest_get_industries(
+    request: Request,
+    db:      AsyncSession = Depends(get_db),
+):
+    return await services_controller.guest_get_industries(request, db)
 
 
 @router.get("/guest/users/profile/{user_id}")
-async def guest_get_user_profile_and_services(
-    user_id:   int,
-    request:   Request,
-    page_size: Optional[int] = Query(default=None),
+async def guest_get_user_profile_and_services_by_user_id(
+    request: Request,
+    params:  UserIdParam = Depends(),
+    query:   GetUserProfileServicesRequest = Depends(),
+    db:      AsyncSession = Depends(get_db),
 ):
-    pass
+    return await services_controller.guest_get_user_profile_and_services_by_user_id(request, params.user_id, query, db)
 
 
 @router.get("/guest/users/{user_id}")
 async def guest_get_services_by_user_id(
-    user_id:        int,
-    request:        Request,
-    page_size:      Optional[int] = Query(default=None),
-    next_token:     Optional[str] = Query(default=None),
-    previous_token: Optional[str] = Query(default=None),
+    request: Request,
+    params:  UserIdParam = Depends(),
+    query:   GetServicesByUserIdRequest = Depends(),
+    db:      AsyncSession = Depends(get_db),
 ):
-    pass
+    return await services_controller.guest_get_services_by_user_id(request, params.user_id, query, db)
 
 
 @router.get("/guest/{service_id}")
 async def guest_get_service_by_service_id(
-    service_id: int,
-    request:    Request,
+    request: Request,
+    params:  ServiceIdParam = Depends(),
+    db:      AsyncSession = Depends(get_db),
 ):
-    pass
+    return await services_controller.guest_get_service_by_service_id(request, params.service_id, db)
 
 
-# ── Protected routes ──────────────────────────────────────────────────────────
+@router.get("/guest")
+async def guest_get_services(
+    request: Request,
+    params:  GuestGetServicesRequest = Depends(),
+    db:      AsyncSession = Depends(get_db),
+):
+    return await services_controller.guest_get_services(request, params, db)
+
+
+# ──────────────────────────────────────────────
+# Static authenticated routes (must come before /{service_id})
+# ──────────────────────────────────────────────
 
 @router.get("/search-suggestions")
 async def search_suggestions(
-    request:      Request,
-    query:        str = Query(..., min_length=1),
-    current_user=Depends(authenticate_token),
+    request: Request,
+    params:  SearchSuggestionsRequest = Depends(),
+    db:      AsyncSession = Depends(get_db),
+    _:       None = Depends(authenticate_token),
 ):
-    pass
+    return await services_controller.search_suggestions(request, params, db)
 
 
 @router.get("/industries")
 async def get_industries(
-    request:      Request,
-    current_user=Depends(authenticate_token),
+    request: Request,
+    db:      AsyncSession = Depends(get_db),
+    _:       None = Depends(authenticate_token),
 ):
-    pass
+    return await services_controller.get_industries(request, db)
 
 
 @router.put("/industries")
 async def update_industries(
-    body:         UpdateIndustriesRequest,
-    request:      Request,
-    current_user=Depends(authenticate_token),
+    body:    UpdateIndustriesRequest,
+    request: Request,
+    db:      AsyncSession = Depends(get_db),
+    _:       None = Depends(authenticate_token),
 ):
-    pass
+    return await services_controller.update_industries(request, body, db)
 
 
 @router.get("/me")
 async def get_me_services(
-    request:        Request,
-    page_size:      Optional[int] = Query(default=None),
-    next_token:     Optional[str] = Query(default=None),
-    previous_token: Optional[str] = Query(default=None),
-    current_user=Depends(authenticate_token),
+    request: Request,
+    params:  GetMeServicesRequest = Depends(),
+    db:      AsyncSession = Depends(get_db),
+    _:       None = Depends(authenticate_token),
 ):
-    pass
-
-
-@router.get("/")
-async def get_services(
-    request:        Request,
-    s:              Optional[str] = Query(default=None, max_length=100),
-    page_size:      Optional[int] = Query(default=None),
-    next_token:     Optional[str] = Query(default=None),
-    previous_token: Optional[str] = Query(default=None),
-    current_user=Depends(authenticate_token),
-):
-    pass
-
-
-@router.get("/users/profile/{user_id}")
-async def get_user_profile_and_services(
-    user_id:      int,
-    request:      Request,
-    page_size:    Optional[int] = Query(default=None),
-    current_user=Depends(authenticate_token),
-):
-    pass
-
-
-@router.get("/users/{user_id}")
-async def get_services_by_user_id(
-    user_id:        int,
-    request:        Request,
-    page_size:      Optional[int] = Query(default=None),
-    next_token:     Optional[str] = Query(default=None),
-    previous_token: Optional[str] = Query(default=None),
-    current_user=Depends(authenticate_token),
-):
-    pass
-
-
-@router.get("/{service_id}")
-async def get_service_by_service_id(
-    service_id:   int,
-    request:      Request,
-    current_user=Depends(authenticate_token),
-):
-    pass
+    return await services_controller.get_me_services(request, params, db)
 
 
 @router.post("/create-service")
 async def create_service(
-    request:      Request,
-    body:         CreateServiceRequest,
-    thumbnail:    UploadFile = File(...),
-    images:       List[UploadFile] = File(...),
-    current_user=Depends(authenticate_token),
+    request:   Request,
+    body:      CreateServiceRequest = Depends(create_service_form),
+    thumbnail: UploadFile            = File(...),
+    images:    Optional[List[UploadFile]] = File(default=None),
+    db:        AsyncSession = Depends(get_db),
+    _:         None = Depends(authenticate_token),
 ):
-    pass
+    if not thumbnail:
+        raise HTTPException(status_code=422, detail="Thumbnail image is required")
+    if not images or len(images) == 0:
+        raise HTTPException(status_code=422, detail="At least one image is required")
+
+    return await services_controller.create_service(request, body, thumbnail, images, db)
+
+
+@router.get("/users/profile/{user_id}")
+async def get_user_profile_and_services_by_user_id(
+    request: Request,
+    params:  UserIdParam = Depends(),
+    query:   GetUserProfileServicesRequest = Depends(),
+    db:      AsyncSession = Depends(get_db),
+    _:       None = Depends(authenticate_token),
+):
+    return await services_controller.get_user_profile_and_services_by_user_id(request, params.user_id, query, db)
+
+
+@router.get("/users/{user_id}")
+async def get_services_by_user_id(
+    request: Request,
+    params:  UserIdParam = Depends(),
+    query:   GetServicesByUserIdRequest = Depends(),
+    db:      AsyncSession = Depends(get_db),
+    _:       None = Depends(authenticate_token),
+):
+    return await services_controller.get_services_by_user_id(request, params.user_id, query, db)
+
+
+@router.get("/")
+async def get_services(
+    request: Request,
+    params:  GetServicesRequest = Depends(),
+    db:      AsyncSession = Depends(get_db),
+    _:       None = Depends(authenticate_token),
+):
+    return await services_controller.get_services(request, params, db)
+
+
+# ──────────────────────────────────────────────
+# Dynamic routes /{service_id}
+# ──────────────────────────────────────────────
+
+@router.get("/{service_id}")
+async def get_service_by_service_id(
+    request: Request,
+    params:  ServiceIdParam = Depends(),
+    db:      AsyncSession = Depends(get_db),
+    _:       None = Depends(authenticate_token),
+):
+    return await services_controller.get_service_by_service_id(request, params.service_id, db)
 
 
 @router.patch("/{service_id}/info")
 async def update_service_info(
-    service_id:   int,
-    body:         UpdateServiceInfoRequest,
-    request:      Request,
-    current_user=Depends(authenticate_token),
+    body:    UpdateServiceInfoRequest,
+    request: Request,
+    params:  ServiceIdParam = Depends(),
+    db:      AsyncSession = Depends(get_db),
+    _:       None = Depends(authenticate_token),
 ):
-    pass
+    return await services_controller.update_service_info(request, params.service_id, body, db)
 
 
 @router.patch("/{service_id}/thumbnail")
 async def update_service_thumbnail(
-    service_id:   int,
-    request:      Request,
-    thumbnail:    UploadFile = File(...),
-    current_user=Depends(authenticate_token),
+    request:   Request,
+    params:    ServiceIdParam = Depends(),
+    body:      UpdateServiceThumbnailRequest = Depends(),
+    thumbnail: UploadFile = File(...),
+    db:        AsyncSession = Depends(get_db),
+    _:         None = Depends(authenticate_token),
 ):
-    pass
+    if not thumbnail:
+        raise HTTPException(status_code=422, detail="Thumbnail image is required")
+
+    return await services_controller.update_service_thumbnail(request, params.service_id, body, thumbnail, db)
 
 
 @router.patch("/{service_id}/update-service-images")
 async def update_service_images(
-    service_id:   int,
-    request:      Request,
-    body:         UpdateServiceImagesRequest,
-    images:       Optional[List[UploadFile]] = File(default=None),
-    current_user=Depends(authenticate_token),
+    request: Request,
+    params:  ServiceIdParam = Depends(),
+    body:    UpdateServiceImagesRequest = Depends(update_service_images_form),
+    images:  Optional[List[UploadFile]] = File(default=None),
+    db:      AsyncSession = Depends(get_db),
+    _:       None = Depends(authenticate_token),
 ):
-    pass
+    has_new_images  = images and len(images) > 0
+    has_kept_images = body.keep_image_ids and len(body.keep_image_ids) > 0
+    if not has_new_images and not has_kept_images:
+        raise HTTPException(status_code=422, detail="At least 1 image is required")
+
+    return await services_controller.update_service_images(request, params.service_id, body, images, db)
 
 
 @router.patch("/{service_id}/plans")
 async def update_service_plans(
-    service_id:   int,
-    body:         UpdateServicePlansRequest,
-    request:      Request,
-    current_user=Depends(authenticate_token),
+    body:    UpdateServicePlansRequest,
+    request: Request,
+    params:  ServiceIdParam = Depends(),
+    db:      AsyncSession = Depends(get_db),
+    _:       None = Depends(authenticate_token),
 ):
-    pass
+    return await services_controller.update_service_plans(request, params.service_id, body, db)
 
 
 @router.patch("/{service_id}/location")
 async def update_service_location(
-    service_id:   int,
-    body:         UpdateServiceLocationRequest,
-    request:      Request,
-    current_user=Depends(authenticate_token),
+    body:    UpdateServiceLocationRequest,
+    request: Request,
+    params:  ServiceIdParam = Depends(),
+    db:      AsyncSession = Depends(get_db),
+    _:       None = Depends(authenticate_token),
 ):
-    pass
+    return await services_controller.update_service_location(request, params.service_id, body, db)
 
 
 @router.delete("/{service_id}")
 async def delete_service(
-    service_id:   int,
-    request:      Request,
-    current_user=Depends(authenticate_token),
+    request: Request,
+    params:  ServiceIdParam = Depends(),
+    db:      AsyncSession = Depends(get_db),
+    _:       None = Depends(authenticate_token),
 ):
-    pass
+    return await services_controller.delete_service(request, params.service_id, db)
 
 
 @router.post("/{service_id}/bookmark")
 async def bookmark_service(
-    service_id:   int,
-    request:      Request,
-    current_user=Depends(authenticate_token),
+    request: Request,
+    params:  ServiceIdParam = Depends(),
+    db:      AsyncSession = Depends(get_db),
+    _:       None = Depends(authenticate_token),
 ):
-    pass
+    return await services_controller.bookmark_service(request, params.service_id, db)
 
 
 @router.delete("/{service_id}/bookmark")
 async def unbookmark_service(
-    service_id:   int,
-    request:      Request,
-    current_user=Depends(authenticate_token),
+    request: Request,
+    params:  ServiceIdParam = Depends(),
+    db:      AsyncSession = Depends(get_db),
+    _:       None = Depends(authenticate_token),
 ):
-    pass
+    return await services_controller.unbookmark_service(request, params.service_id, db)

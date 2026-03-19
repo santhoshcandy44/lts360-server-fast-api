@@ -1,159 +1,181 @@
-from fastapi import APIRouter, Depends, Request, Query, UploadFile, File
-from typing import Optional, List
+from database import get_db
 from middleware.auth_middleware import authenticate_token
-from schemas.used_product_schemas import CreateUsedProductListingRequest
+
+from fastapi import APIRouter, Depends, Request, Path, UploadFile, File, HTTPException
+from sqlalchemy.ext.asyncio import AsyncSession
+from typing import Optional, List
+
+from schemas.used_products_schemas import (
+    GuestGetUsedProductListingsRequest,
+    GetUsedProductListingsRequest,
+    GetUsedProductListingsByUserIdRequest,
+    GetUserProfileRequest,
+    GetMeUsedProductListingsRequest,
+    UsedProductSearchSuggestionsRequest,
+    UsedProductListingIdParam,
+    UserIdParam,
+    CreateOrUpdateUsedProductListingRequest,
+    create_or_update_used_product_listing_form,
+)
+
+from controllers import used_products_controller
 
 router = APIRouter(
-    prefix="/used-product-listings",
+    prefix="/used-products",
     tags=["Used Products"],
 )
 
-@router.get("/guest")
-async def guest_get_used_product_listings(
-    request:        Request,
-    s:              Optional[str]   = Query(default=None, max_length=100),
-    latitude:       Optional[float] = Query(default=None, ge=-90,  le=90),
-    longitude:      Optional[float] = Query(default=None, ge=-180, le=180),
-    page_size:      Optional[int]   = Query(default=None),
-    next_token:     Optional[str]   = Query(default=None),
-    previous_token: Optional[str]   = Query(default=None),
-):
-    pass
-
 
 @router.get("/guest/search-suggestions")
-async def guest_search_suggestions(
+async def guest_used_product_listings_search_suggestions(
     request: Request,
-    query:   str = Query(..., min_length=1),
+    params:  UsedProductSearchSuggestionsRequest = Depends(),
+    db:      AsyncSession = Depends(get_db),
 ):
-    pass
+    return await used_products_controller.used_product_listings_search_queries(request, params, db)
 
 
 @router.get("/guest/users/profile/{user_id}")
-async def guest_get_user_profile_and_listings(
-    user_id:   int,
-    request:   Request,
-    page_size: Optional[int] = Query(default=None),
+async def guest_get_user_profile_and_used_product_listings_by_user_id(
+    request: Request,
+    params:  UserIdParam = Depends(),
+    query:   GetUserProfileRequest = Depends(),
+    db:      AsyncSession = Depends(get_db),
 ):
-    pass
+    return await used_products_controller.guest_get_user_profile_and_used_product_listings_by_user_id(request, params.user_id, query, db)
 
 
 @router.get("/guest/users/{user_id}")
-async def guest_get_listings_by_user_id(
-    user_id:        int,
-    request:        Request,
-    page_size:      Optional[int] = Query(default=None),
-    next_token:     Optional[str] = Query(default=None),
-    previous_token: Optional[str] = Query(default=None),
+async def guest_get_used_product_listings_by_user_id(
+    request: Request,
+    params:  UserIdParam = Depends(),
+    query:   GetUsedProductListingsByUserIdRequest = Depends(),
+    db:      AsyncSession = Depends(get_db),
 ):
-    pass
+    return await used_products_controller.guest_get_used_product_listings_by_user_id(request, params.user_id, query, db)
 
 
 @router.get("/guest/{used_product_listing_id}")
-async def guest_get_listing_by_id(
-    used_product_listing_id: int,
-    request:                 Request,
+async def guest_get_used_product_listing_by_id(
+    request: Request,
+    params:  UsedProductListingIdParam = Depends(),
+    db:      AsyncSession = Depends(get_db),
 ):
-    pass
+    return await used_products_controller.guest_get_used_product_listing_by_used_product_listing_id(request, params.used_product_listing_id, db)
 
 
-# ── Protected routes ──────────────────────────────────────────────────────────
+@router.get("/guest")
+async def guest_get_used_product_listings(
+    request: Request,
+    params:  GuestGetUsedProductListingsRequest = Depends(),
+    db:      AsyncSession = Depends(get_db),
+):
+    return await used_products_controller.guest_get_used_product_listings(request, params, db)
+
 
 @router.get("/search-suggestions")
-async def search_suggestions(
-    request:      Request,
-    query:        str = Query(..., min_length=1),
-    current_user=Depends(authenticate_token),
+async def used_product_listings_search_suggestions(
+    request: Request,
+    params:  UsedProductSearchSuggestionsRequest = Depends(),
+    db:      AsyncSession = Depends(get_db),
+    _:       None = Depends(authenticate_token),
 ):
-    pass
+    return await used_products_controller.used_product_listings_search_queries(request, params, db)
 
 
 @router.get("/me")
-async def get_me_listings(
-    request:        Request,
-    page_size:      Optional[int] = Query(default=None),
-    next_token:     Optional[str] = Query(default=None),
-    previous_token: Optional[str] = Query(default=None),
-    current_user=Depends(authenticate_token),
+async def get_me_used_product_listings(
+    request: Request,
+    params:  GetMeUsedProductListingsRequest = Depends(),
+    db:      AsyncSession = Depends(get_db),
+    _:       None = Depends(authenticate_token),
 ):
-    pass
+    return await used_products_controller.get_me_used_product_listings(request, params, db)
+
+
+@router.get("/users/profile/{user_id}")
+async def get_user_profile_and_used_product_listings_by_user_id(
+    request: Request,
+    params:  UserIdParam = Depends(),
+    query:   GetUserProfileRequest = Depends(),
+    db:      AsyncSession = Depends(get_db),
+    _:       None = Depends(authenticate_token),
+):
+    return await used_products_controller.get_user_profile_and_used_product_listings_by_user_id(request, params.user_id, query, db)
+
+
+@router.get("/users/{user_id}")
+async def get_used_product_listings_by_user_id(
+    request: Request,
+    params:  UserIdParam = Depends(),
+    query:   GetUsedProductListingsByUserIdRequest = Depends(),
+    db:      AsyncSession = Depends(get_db),
+    _:       None = Depends(authenticate_token),
+):
+    return await used_products_controller.get_used_product_listings_by_user_id(request, params.user_id, query, db)
+
+
+@router.get("/{used_product_listing_id}")
+async def get_used_product_listing_by_id(
+    request: Request,
+    params:  UsedProductListingIdParam = Depends(),
+    db:      AsyncSession = Depends(get_db),
+    _:       None = Depends(authenticate_token),
+):
+    return await used_products_controller.get_used_product_listing_by_used_product_listing_id(request, params.used_product_listing_id, db)
 
 
 @router.get("/")
 async def get_used_product_listings(
-    request:        Request,
-    s:              Optional[str] = Query(default=None, max_length=100),
-    page_size:      Optional[int] = Query(default=None),
-    next_token:     Optional[str] = Query(default=None),
-    previous_token: Optional[str] = Query(default=None),
-    current_user=Depends(authenticate_token),
+    request: Request,
+    params:  GetUsedProductListingsRequest = Depends(),
+    db:      AsyncSession = Depends(get_db),
+    _:       None = Depends(authenticate_token),
 ):
-    pass
-
-
-@router.get("/users/profile/{user_id}")
-async def get_user_profile_and_listings(
-    user_id:      int,
-    request:      Request,
-    page_size:    Optional[int] = Query(default=None),
-    current_user=Depends(authenticate_token),
-):
-    pass
-
-
-@router.get("/users/{user_id}")
-async def get_listings_by_user_id(
-    user_id:        int,
-    request:        Request,
-    page_size:      Optional[int] = Query(default=None),
-    next_token:     Optional[str] = Query(default=None),
-    previous_token: Optional[str] = Query(default=None),
-    current_user=Depends(authenticate_token),
-):
-    pass
-
-
-@router.get("/{used_product_listing_id}")
-async def get_listing_by_id(
-    used_product_listing_id: int,
-    request:                 Request,
-    current_user=Depends(authenticate_token),
-):
-    pass
+    return await used_products_controller.get_used_product_listings(request, params, db)
 
 
 @router.post("/")
-async def create_or_update_listing(
-    request:      Request,
-    body:         CreateUsedProductListingRequest,
-    images:       Optional[List[UploadFile]] = File(default=None),
-    current_user=Depends(authenticate_token),
+async def create_or_update_used_product_listing(
+    request: Request,
+    body:    CreateOrUpdateUsedProductListingRequest = Depends(create_or_update_used_product_listing_form),
+    images:  Optional[List[UploadFile]] = File(default=None),
+    db:      AsyncSession = Depends(get_db),
+    _:       None = Depends(authenticate_token),
 ):
-    pass
+    has_new_images  = images and len(images) > 0
+    has_kept_images = body.keep_image_ids and len(body.keep_image_ids) > 0
+    if not has_new_images and not has_kept_images:
+        raise HTTPException(status_code=422, detail="At least one image is required")
+
+    return await used_products_controller.create_or_update_used_product_listing(request, body, images, db)
 
 
 @router.delete("/{used_product_listing_id}")
-async def delete_listing(
-    used_product_listing_id: int,
-    request:                 Request,
-    current_user=Depends(authenticate_token),
+async def delete_used_product_listing(
+    request: Request,
+    params:  UsedProductListingIdParam = Depends(),
+    db:      AsyncSession = Depends(get_db),
+    _:       None = Depends(authenticate_token),
 ):
-    pass
+    return await used_products_controller.delete_used_product_listing(request, params.used_product_listing_id, db)
 
 
 @router.post("/{used_product_listing_id}/bookmark")
-async def bookmark_listing(
-    used_product_listing_id: int,
-    request:                 Request,
-    current_user=Depends(authenticate_token),
+async def bookmark_used_product_listing(
+    request: Request,
+    params:  UsedProductListingIdParam = Depends(),
+    db:      AsyncSession = Depends(get_db),
+    _:       None = Depends(authenticate_token),
 ):
-    pass
+    return await used_products_controller.bookmark_used_product_listing(request, params.used_product_listing_id, db)
 
 
 @router.delete("/{used_product_listing_id}/bookmark")
-async def unbookmark_listing(
-    used_product_listing_id: int,
-    request:                 Request,
-    current_user=Depends(authenticate_token),
+async def unbookmark_used_product_listing(
+    request: Request,
+    params:  UsedProductListingIdParam = Depends(),
+    db:      AsyncSession = Depends(get_db),
+    _:       None = Depends(authenticate_token),
 ):
-    pass
+    return await used_products_controller.unbookmark_used_product_listing(request, params.used_product_listing_id, db)

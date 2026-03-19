@@ -16,7 +16,6 @@ from routers import (
     used_product_listing,
 )
 
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
@@ -29,7 +28,7 @@ application = FastAPI(title=APP_NAME, lifespan=lifespan)
 @application.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     errors = exc.errors()
-    
+
     if errors:
         first_error = errors[0]
         field   = " -> ".join(str(loc) for loc in first_error["loc"] if loc != "body")

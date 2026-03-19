@@ -1,19 +1,54 @@
-
+# config.py
 import os
-
 from dotenv import load_dotenv
 
-load_dotenv() 
+load_dotenv()  # load .env once here — no need to call it anywhere else
 
+# ── JWT ──────────────────────────────────────────────────────────────────────
 ACCESS_TOKEN_SECRET  = os.getenv("ACCESS_TOKEN_SECRET")
 REFRESH_TOKEN_SECRET = os.getenv("REFRESH_TOKEN_SECRET")
 ALGORITHM            = os.getenv("ALGORITHM", "HS256")
 TOKEN_EXPIRE_MINUTES = int(os.getenv("TOKEN_EXPIRE_MINUTES", "30"))
 
-API_DOC_BASE_URL = os.getenv("API_DOC_BASE_URL", "http://localhost:8000")
-
+# ── Database ─────────────────────────────────────────────────────────────────
 DATABASE_URL = os.getenv("DATABASE_URL")
 
-APP_NAME    = os.getenv("APP_NAME", "LTS360 Server")
+# ── App ──────────────────────────────────────────────────────────────────────
+APP_NAME    = os.getenv("APP_NAME", "FastAPI App")
 DEBUG       = os.getenv("DEBUG", "false").lower() == "true"
 ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000").split(",")
+
+# ── Guard: crash early if critical keys are missing ──────────────────────────
+if not ACCESS_TOKEN_SECRET:
+    raise RuntimeError("ACCESS_TOKEN_SECRET is not set in .env")
+if not DATABASE_URL:
+    raise RuntimeError("DATABASE_URL is not set in .env")
+
+# Auth extras
+REFRESH_TOKEN_SECRET          = os.getenv("REFRESH_TOKEN_SECRET")
+FORGOT_PASSWORD_TOKEN_SECRET  = os.getenv("FORGOT_PASSWORD_TOKEN_SECRET", "forgot-secret")
+ACCESS_TOKEN_EXPIRE_MINUTES   = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
+REFRESH_TOKEN_EXPIRE_DAYS     = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "7"))
+GOOGLE_CLIENT_ID              = os.getenv("GOOGLE_CLIENT_ID")
+PROFILE_BASE_URL              = os.getenv("PROFILE_BASE_URL", "http://localhost:8000/media/profiles")
+
+# Google OAuth
+OAUTH_GOOGLE_WEB_CLIENT_ID      = os.getenv("OAUTH_GOOGLE_WEB_CLIENT_ID")
+OAUTH_GOOGLE_ANDROID_CLIENT_ID  = os.getenv("OAUTH_GOOGLE_ANDROID_CLIENT_ID")
+
+# Encryption
+FCM_TOKEN_SECRET                = os.getenv("FCM_TOKEN_SECRET", "fcm-secret")
+PROFILE_PIC_MEDIA_ENCRYPTION    = os.getenv("PROFILE_PIC_MEDIA_ENCRYPTION", "media-secret")
+
+# SMTP
+SMTP_HOST     = os.getenv("SMTP_HOST")
+SMTP_PORT     = os.getenv("SMTP_PORT", "587")
+SMTP_USER     = os.getenv("SMTP_USER")
+SMTP_PASSWORD = os.getenv("SMTP_PASSWORD")
+
+# Token expiry
+ACCESS_TOKEN_EXPIRE_SECONDS = int(os.getenv("ACCESS_TOKEN_EXPIRE_SECONDS", "60"))
+REFRESH_TOKEN_EXPIRE_DAYS   = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "90"))
+
+# App
+APP_NAME = os.getenv("APP_NAME", "LTS360")
