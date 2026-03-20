@@ -1,19 +1,26 @@
-import redis.asyncio as redis
-import json
-from config import REDIS_URL
+from datetime import datetime, timedelta
 
-r = redis.from_url(REDIS_URL)
+# In-memory store
+_otp_store: dict[str, dict] = {}
 
 async def save_otp(key: str, otp: str, email: str, expires_minutes: int = 15):
-    data = {"otp": otp, "email": email}
-    await r.setex(key, expires_minutes * 60, json.dumps(data))
+    _otp_store[key] = {
+        "otp": otp,
+        "email": email,
+        "expires_at": datetime.utcnow() + timedelta(minutes=expires_minutes)
+    }
 
 async def get_otp(key: str):
-    val = await r.get(key)
-    return json.loads(val) if val else None
+    data = _otp_store.get(key)
+    if not data:
+        return None
+    if datetime.utcnow() > data["expires_at"]:
+        del _otp_store[key]
+        return None
+    return data
 
 async def delete_otp(key: str):
-    await r.delete(key)
+    _otp_store.pop(key, None)
 
 async def is_expired(key: str) -> bool:
-    return not await r.exists(key)
+    return await get_otp(key) is None

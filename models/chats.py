@@ -1,6 +1,6 @@
 # models/offline_messages.py
 from sqlmodel import SQLModel, Field
-from sqlalchemy import Column, BigInteger, ForeignKey, Enum as SAEnum
+from sqlalchemy import Column, BigInteger, Text, ForeignKey, Enum as SAEnum
 from typing import Optional
 from datetime import datetime, timezone
 
@@ -15,8 +15,8 @@ class E2EEPublicKey(SQLModel, table=True):
                                             nullable=False,
                                         )
                                     )
-    encrypted_public_key: str      = Field()
-    key_version:          int      = Field()
+    encrypted_public_key: str      =  Field(sa_column=Column(Text)) 
+    key_version:          int      = Field(sa_column=Column(BigInteger)) 
     created_at:           datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at:           datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     

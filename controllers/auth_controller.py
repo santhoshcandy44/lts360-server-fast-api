@@ -7,10 +7,11 @@ from helpers.response_helper import send_json_response, send_error_response
 from jose import JWTError, jwt
 from jose.jwt import get_unverified_claims  
 
+from schemas.auth_schemas import EmailSignInSchema, ForgotPasswordSchema, ForgotPasswordVerifyOTPSchema, GoogleLTS360SignInSchema, GoogleSignInSchema, GoogleSignUpSchema, LTS360SignInSchema, RegisterOTPSchema, ResetPasswordSchema, VerifyOTPSchema
 from utils.auth import (
     generate_tokens, generate_salt, generate_pepper, hash_password,
     generate_forgot_password_token, decode_forgot_password_token,
-    verify_id_token, generate_otp, send_otp_email,
+    verify_id_token, generate_otp, send_otp_email
 )
 
 from utils.otp_store import save_otp, get_otp, delete_otp, is_expired
@@ -20,7 +21,7 @@ from sqlmodel import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.users import User
-from .board_controller import create_default_boards_for_user, get_boards
+from .board_controller import create_default_boards_for_user, get_boards, get_boards_by_user_id
 
 def _build_user_response(result, profile_base_url: str) -> dict:
     return {
@@ -48,16 +49,15 @@ async def _update_last_sign_in(user: User, db: AsyncSession) -> User:
     await db.refresh(user)
     return user
 
-
-async def register(request: Request, email: str, db: AsyncSession):
+async def register(request: Request, schema: RegisterOTPSchema, db: AsyncSession):
     try:
+        email = schema.email
         result = await db.execute(select(User).where(User.email == email))
         if result.scalar_one_or_none():
             return send_error_response(request, 409, "Email in use with another account")
 
         otp = generate_otp()
-        save_otp(key=email, otp=otp, email=email)
-
+        await save_otp(key=email, otp=otp, email=email)
         response = await send_otp_email(email, otp)
         if not response["success"]:
             return send_error_response(request, 500, "Failed to send OTP")
@@ -66,46 +66,52 @@ async def register(request: Request, email: str, db: AsyncSession):
     except Exception:
         return send_error_response(request, 500, "Internal Server Error")
 
-
-async def verify_otp(request: Request, body, db: AsyncSession):
+async def verify_otp(request: Request, schema: VerifyOTPSchema, db: AsyncSession):
     try:
-        entry = get_otp(body.email)
+        email = schema.email
+        otp = schema.otp
+        password = schema.password
+        first_name = schema.first_name
+        last_name = schema.last_name
+        account_type = schema.account_type
+
+        entry = await get_otp(email)
         if not entry:
             return send_error_response(request, 400, "OTP not found or expired")
-        if is_expired(body.email):
-            delete_otp(body.email)
+        if await is_expired(email):
+            await delete_otp(email)
             return send_error_response(request, 400, "OTP expired")
-        if entry["otp"] != body.otp:
+        if entry["otp"] != otp:
             return send_error_response(request, 400, "Invalid OTP")
 
-        result = await db.execute(select(User).where(User.email == body.email))
+        result = await db.execute(select(User).where(User.email == email))
         if result.scalar_one_or_none():
             return send_error_response(request, 409, "Email in use with another account")
 
         salt      = await generate_salt()
         pepper    = await generate_pepper()
-        hashed_pw = await hash_password(pepper + body.password, salt)
+        hashed_pw = await hash_password(pepper + password, salt)
 
         new_user = User(
-            first_name=body.first_name,
-            last_name=body.last_name,
-            email=body.email,
+            first_name =first_name,
+            last_name=last_name,
+            email=email,
             is_email_verified=1,
-            account_type=body.account_type,
+            account_type=account_type,
             sign_up_method="legacy_email",
             hashed_password=hashed_pw,
             pepper=pepper,
-            salt=salt
+            salt=salt,
+            last_sign_in=datetime.now(timezone.utc)
         )
         db.add(new_user)
         await db.flush()
-
-        new_user = await _update_last_sign_in(new_user, db)
+        await db.refresh(new_user)
 
         tokens = generate_tokens(new_user.user_id, new_user.email, "legacy_email", new_user.last_sign_in)
         await create_default_boards_for_user(new_user.user_id, db)
         boards = await get_boards(new_user.user_id, db)
-        delete_otp(body.email)
+        await delete_otp(email)
 
         return send_json_response(201, "User registered successfully", data={
             "access_token":  tokens["accessToken"],
@@ -116,10 +122,12 @@ async def verify_otp(request: Request, body, db: AsyncSession):
     except Exception:
         return send_error_response(request, 500, "Internal server error")
 
-
-async def google_sign_up(request: Request, body, db: AsyncSession):
+async def google_sign_up(request: Request, schema: GoogleSignUpSchema, db: AsyncSession):
     try:
-        payload       = await verify_id_token(body.id_token)
+        id_token = schema.id_token
+        account_type = schema.account_type
+
+        payload       = await verify_id_token(id_token)
         payload_email = payload.get("email")
 
         result = await db.execute(select(User).where(User.email == payload_email))
@@ -132,13 +140,13 @@ async def google_sign_up(request: Request, body, db: AsyncSession):
             email=payload_email,
             is_email_verified=1,
             profile_pic_url=payload.get("picture"),
-            account_type=body.account_type,
+            account_type=account_type,
             sign_up_method="google",
+            last_sign_in=datetime.now(timezone.utc)
         )
         db.add(new_user)
         await db.flush()
-
-        new_user = await _update_last_sign_in(new_user, db)
+        await db.refresh(new_user)
 
         tokens = generate_tokens(new_user.user_id, new_user.email, "google", new_user.last_sign_in)
         await create_default_boards_for_user(new_user.user_id, db)
@@ -153,21 +161,22 @@ async def google_sign_up(request: Request, body, db: AsyncSession):
     except Exception:
         return send_error_response(request, 500, "Internal server error")
 
-
-async def email_sign_in(request: Request, body, db: AsyncSession):
+async def email_sign_in(request: Request, schema: EmailSignInSchema, db: AsyncSession):
     try:
-        result = await db.execute(select(User).where(User.email == body.email))
+        email = schema.email
+        password = schema.password
+        result = await db.execute(select(User).where(User.email == email))
         existing_user = result.scalar_one_or_none()
         if not existing_user:
             return send_error_response(request, 404, "Invalid user account")
 
-        hashed_attempt = await hash_password(existing_user.pepper + body.password, existing_user.salt)
+        hashed_attempt = await hash_password(existing_user.pepper + password, existing_user.salt)
         if hashed_attempt != existing_user.hashed_password:
             return send_error_response(request, 400, "Invalid password")
 
         existing_user = await _update_last_sign_in(existing_user, db)
         tokens = generate_tokens(existing_user.user_id, existing_user.email, "legacy_email", existing_user.last_sign_in)
-        boards = await get_boards(existing_user.user_id, db)
+        boards = await get_boards_by_user_id(request, existing_user.user_id, db)
 
         return send_json_response(200, "User login successfully", data={
             "access_token":  tokens["accessToken"],
@@ -178,28 +187,11 @@ async def email_sign_in(request: Request, body, db: AsyncSession):
     except Exception:
         return send_error_response(request, 500, "Internal Server Error")
 
-
-async def partner_email_sign_in(request: Request, body, db: AsyncSession):
+async def google_sign_in(request: Request, schema: GoogleSignInSchema, db: AsyncSession):
     try:
-        result = await db.execute(select(User).where(User.email == body.email))
-        existing_user = result.scalar_one_or_none()
-        if not existing_user:
-            return send_error_response(request, 404, "Invalid user account")
+        id_token = schema.id_token
 
-        hashed_attempt = await hash_password(existing_user.pepper + body.password, existing_user.salt)
-        if hashed_attempt != existing_user.hashed_password:
-            return send_error_response(request, 400, "Invalid password")
-
-        return send_json_response(200, "User login successfully", data={
-            "user": _build_user_response(existing_user, PROFILE_BASE_URL),
-        })
-    except Exception:
-        return send_error_response(request, 500, "Internal Server Error")
-
-
-async def google_sign_in(request: Request, body, db: AsyncSession):
-    try:
-        payload       = await verify_id_token(body.id_token)
+        payload       = await verify_id_token(id_token)
         payload_email = payload.get("email")
         if not payload_email:
             return send_error_response(request, 503, "Something went wrong")
@@ -224,10 +216,31 @@ async def google_sign_in(request: Request, body, db: AsyncSession):
     except Exception:
         return send_error_response(request, 500, "Internal server error")
 
-
-async def partner_google_sign_in(request: Request, body, db: AsyncSession):
+async def partner_email_sign_in(request: Request, schema: LTS360SignInSchema, db: AsyncSession):
     try:
-        payload       = await verify_id_token(body.id_token)
+        email = schema.email
+        password = schema.password
+
+        result = await db.execute(select(User).where(User.email == email))
+        existing_user = result.scalar_one_or_none()
+        if not existing_user:
+            return send_error_response(request, 404, "Invalid user account")
+
+        hashed_attempt = await hash_password(existing_user.pepper + password, existing_user.salt)
+        if hashed_attempt != existing_user.hashed_password:
+            return send_error_response(request, 400, "Invalid password")
+
+        return send_json_response(200, "User login successfully", data={
+            "user": _build_user_response(existing_user, PROFILE_BASE_URL),
+        })
+    except Exception:
+        return send_error_response(request, 500, "Internal Server Error")
+
+async def partner_google_sign_in(request: Request, schema: GoogleLTS360SignInSchema, db: AsyncSession):
+    try:
+        id_token = schema.id_token
+
+        payload       = await verify_id_token(id_token)
         payload_email = payload.get("email")
         if not payload_email:
             return send_error_response(request, 503, "Something went wrong")
@@ -246,10 +259,11 @@ async def partner_google_sign_in(request: Request, body, db: AsyncSession):
     except Exception:
         return send_error_response(request, 500, "Internal server error")
 
-
-async def forgot_password(request: Request, body, db: AsyncSession):
+async def forgot_password(request: Request, schema: ForgotPasswordSchema, db: AsyncSession):
     try:
-        result = await db.execute(select(User).where(User.email == body.email))
+        email = schema.email
+
+        result = await db.execute(select(User).where(User.email == email))
         existing_user = result.scalar_one_or_none()
         if not existing_user:
             return send_error_response(request, 409, "Invalid user email")
@@ -257,9 +271,9 @@ async def forgot_password(request: Request, body, db: AsyncSession):
             return send_error_response(request, 409, "Email is associated with different sign in method")
 
         otp = generate_otp()
-        save_otp(key=f"forgot_{body.email}", otp=otp, email=body.email)
+        await save_otp(key=f"forgot_{email}", otp=otp, email=email)
 
-        response = await send_otp_email(body.email, otp)
+        response = await send_otp_email(email, otp)
         if not response["success"]:
             return send_error_response(request, 500, "Failed to send OTP")
 
@@ -267,26 +281,28 @@ async def forgot_password(request: Request, body, db: AsyncSession):
     except Exception:
         return send_error_response(request, 400, "Internal Server Error")
 
-
-async def forgot_password_verify_otp(request: Request, body, db: AsyncSession):
+async def forgot_password_verify_otp(request: Request, schema: ForgotPasswordVerifyOTPSchema, db: AsyncSession):
     try:
-        key   = f"forgot_{body.email}"
-        entry = get_otp(key)
+        email = schema.email
+        otp = schema.otp
+
+        key   = f"forgot_{email}"
+        entry = await get_otp(key)
         if not entry:
             return send_error_response(request, 403, "OTP not found or expired")
-        if is_expired(key):
-            delete_otp(key)
+        if await is_expired(key):
+            await delete_otp(key)
             return send_error_response(request, 403, "OTP has expired")
-        if entry["otp"] != body.otp:
+        if entry["otp"] != otp:
             return send_error_response(request, 400, "Invalid OTP")
 
-        result = await db.execute(select(User).where(User.email == body.email))
+        result = await db.execute(select(User).where(User.email == email))
         user = result.scalar_one_or_none()
         if not user:
             return send_error_response(request, 403, "User not exist")
 
         token = generate_forgot_password_token(user.user_id, user.email)
-        delete_otp(key)
+        await delete_otp(key)
 
         return send_json_response(201, "OTP verified successfully", data={
             "email":        user.email,
@@ -296,9 +312,10 @@ async def forgot_password_verify_otp(request: Request, body, db: AsyncSession):
         return send_error_response(request, 400, "Internal Server Error")
 
 
-async def reset_password(request: Request, body, db: AsyncSession):
+async def reset_password(request: Request, schmea: ResetPasswordSchema, db: AsyncSession):
     try:
-        auth_header = request.headers.get("authorization")
+        password = schmea.password
+        auth_header = request.headers.get("Authorization")
         if not auth_header:
             return send_error_response(request, 401, "Access denied")
         token = auth_header.split(" ")[1] if " " in auth_header else None
@@ -315,7 +332,7 @@ async def reset_password(request: Request, body, db: AsyncSession):
 
         salt      = await generate_salt()
         pepper    = await generate_pepper()
-        hashed_pw = await hash_password(pepper + body.password, salt)
+        hashed_pw = await hash_password(pepper + password, salt)
 
         user.hashed_password = hashed_pw
         user.salt            = salt
@@ -329,7 +346,7 @@ async def reset_password(request: Request, body, db: AsyncSession):
 
 async def refresh_token(request: Request, db: AsyncSession):
     try:
-        auth_header = request.headers.get("authorization")
+        auth_header = request.headers.get("Authorization")
         if not auth_header:
             return send_error_response(request, 401, "Access denied")
         token = auth_header.split(" ")[1] if " " in auth_header else None
@@ -339,6 +356,10 @@ async def refresh_token(request: Request, db: AsyncSession):
         try:
             payload = jwt.decode(token, REFRESH_TOKEN_SECRET, algorithms=["HS256"])
         except JWTError as e:
+            import traceback
+            import sys
+            traceback.print_exc(file=sys.stderr)
+            sys.stderr.flush()
             if "expired" in str(e).lower():
                 decoded = get_unverified_claims(token)
                 user_id = decoded.get("userId")

@@ -3,7 +3,13 @@ from sqlmodel import SQLModel
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from config import DATABASE_URL
 
-engine = create_async_engine(DATABASE_URL, echo=True)
+engine = create_async_engine(
+    DATABASE_URL,
+    pool_pre_ping=True,
+    pool_size=5,      
+    pool_recycle=1800 ,
+    echo=False
+)
 
 AsyncSessionLocal = async_sessionmaker(
     bind=engine,
@@ -11,11 +17,12 @@ AsyncSessionLocal = async_sessionmaker(
     expire_on_commit=False,
 )
 
-
 async def init_db():
+    print("Connecting to DB...")
     async with engine.begin() as conn:
+        print("Connected, running create_all...")
         await conn.run_sync(SQLModel.metadata.create_all)
-
+        print("create_all done!")
 
 async def get_db():
     async with AsyncSessionLocal() as session:

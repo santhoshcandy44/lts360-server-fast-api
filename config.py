@@ -4,12 +4,6 @@ from dotenv import load_dotenv
 
 load_dotenv()  # load .env once here — no need to call it anywhere else
 
-# ── JWT ──────────────────────────────────────────────────────────────────────
-ACCESS_TOKEN_SECRET  = os.getenv("ACCESS_TOKEN_SECRET")
-REFRESH_TOKEN_SECRET = os.getenv("REFRESH_TOKEN_SECRET")
-ALGORITHM            = os.getenv("ALGORITHM", "HS256")
-TOKEN_EXPIRE_MINUTES = int(os.getenv("TOKEN_EXPIRE_MINUTES", "30"))
-
 # ── Database ─────────────────────────────────────────────────────────────────
 DATABASE_URL = os.getenv("DATABASE_URL")
 
@@ -18,17 +12,14 @@ APP_NAME    = os.getenv("APP_NAME", "FastAPI App")
 DEBUG       = os.getenv("DEBUG", "false").lower() == "true"
 ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000").split(",")
 
-# ── Guard: crash early if critical keys are missing ──────────────────────────
-if not ACCESS_TOKEN_SECRET:
-    raise RuntimeError("ACCESS_TOKEN_SECRET is not set in .env")
-if not DATABASE_URL:
-    raise RuntimeError("DATABASE_URL is not set in .env")
-
 # Auth extras
+ACCESS_TOKEN_SECRET  = os.getenv("ACCESS_TOKEN_SECRET")
+ALGORITHM            = os.getenv("ALGORITHM", "HS256")
+
 REFRESH_TOKEN_SECRET          = os.getenv("REFRESH_TOKEN_SECRET")
-FORGOT_PASSWORD_TOKEN_SECRET  = os.getenv("FORGOT_PASSWORD_TOKEN_SECRET", "forgot-secret")
-ACCESS_TOKEN_EXPIRE_MINUTES   = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
-REFRESH_TOKEN_EXPIRE_DAYS     = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "7"))
+FORGOT_PASSWORD_TOKEN_SECRET  = os.getenv("ACCESS_TOKEN_SECRET")
+ACCESS_TOKEN_EXPIRE_SECONDS = int(os.getenv("ACCESS_TOKEN_EXPIRE_SECONDS", "60"))
+REFRESH_TOKEN_EXPIRE_DAYS   = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "90"))
 GOOGLE_CLIENT_ID              = os.getenv("GOOGLE_CLIENT_ID")
 
 
@@ -56,10 +47,6 @@ S3_BUCKET_NAME     = os.getenv("S3_BUCKET_NAME")
 S3_BUCKET_REGION     = os.getenv("S3_BUCKET_REGION")
 S3_BUCKET_ACCESS_KEY     = os.getenv("S3_BUCKET_ACCESS_KEY")
 S3_BUCKET_SECRET_KEY     = os.getenv("S3_BUCKET_SECRET_KEY")
-
-# Token expiry
-ACCESS_TOKEN_EXPIRE_SECONDS = int(os.getenv("ACCESS_TOKEN_EXPIRE_SECONDS", "60"))
-REFRESH_TOKEN_EXPIRE_DAYS   = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "90"))
 
 #Redsi
 REDIS_URL =  os.getenv("REDIS_URL", "redis://doc.example.com")

@@ -7,7 +7,7 @@ from typing import Optional
 
 from models.local_jobs import LocalJobApplicant
 from sqlmodel import SQLModel, Field, Column, Relationship
-from sqlalchemy import Column, Integer, BigInteger, ForeignKey, UniqueConstraint, Numeric, Enum as SAEnum, UniqueConstraint, event
+from sqlalchemy import Column, Integer, BigInteger, Text, ForeignKey, UniqueConstraint, Numeric, Enum as SAEnum, UniqueConstraint, event
 from sqlalchemy.orm import Session
 
 class User(SQLModel, table=True):
@@ -49,11 +49,12 @@ class User(SQLModel, table=True):
                                                )
                                            )
     media_id:              str            = Field(max_length=32, unique=True)
-    created_at:            datetime       = Field(default_factory=timezone.utc)
-    updated_at:            datetime       = Field(default_factory=timezone.utc)
+    created_at:            datetime       = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at:            datetime       = Field(default_factory=lambda: datetime.now(timezone.utc))
 
-    location: "UserLocation" = Relationship(
-        back_populates="user"
+    location: Optional["UserLocation"] = Relationship(
+        back_populates="user",
+         sa_relationship_kwargs={"lazy": "selectin"}
     )
 
     local_job_applications: list["LocalJobApplicant"] = Relationship(
@@ -76,7 +77,7 @@ class UserLocation(SQLModel, table=True):
     created_at:    datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at:    datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
-    user: User = Relationship(back_populates="location")
+    user: User = Relationship(back_populates="location",  sa_relationship_kwargs={"lazy": "selectin"})
 
  
 class UserBoard(SQLModel, table=True):
@@ -117,13 +118,13 @@ def before_insert_local_job(mapper, connection, target):
  
     while True:
         new_id = random.randint(10_000_000, 99_999_999)
-        exists = session.query(User).filster_by(service_id=new_id).first()
+        exists = session.query(User).filter_by(user_id=new_id).first()
         if not exists:
-            target.service_id = new_id
+            target.user_id = new_id
             break
  
-    if not target.short_code:
-        target.short_code = _generate_short_code()
+    if not target.media_id:
+        target.media_id = _generate_short_code()
 
     
 class FCMToken(SQLModel, table=True):
@@ -131,7 +132,7 @@ class FCMToken(SQLModel, table=True):
  
     id:         Optional[int] = Field(primary_key=True)
     user_id:    int           = Field(sa_column=Column(BigInteger, ForeignKey("users.user_id", ondelete="CASCADE"), unique=True, nullable=False))
-    fcm_token:  Optional[str] = Field(default=None)
+    fcm_token:  Optional[str] = Field(sa_column=Column(Text))  
     created_at: datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
      

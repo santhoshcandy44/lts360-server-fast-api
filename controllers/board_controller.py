@@ -31,7 +31,37 @@ async def create_default_boards_for_user(user_id: int, db: AsyncSession):
         await db.execute(stmt)
  
     await db.flush()
+
  
+async def get_boards_by_user_id(request: Request, user_id: int,  db: AsyncSession):
+    try:
+        result = await db.execute(
+            select(
+                Board.board_id,
+                Board.board_name,
+                Board.board_label,
+                UserBoard.display_order,
+                UserBoard.user_id,
+            )
+            .outerjoin(UserBoard, (UserBoard.board_id == Board.board_id) & (UserBoard.user_id == user_id))
+        )
+        rows = result.fetchall()
+
+        boards = [
+            {
+                "board_id":      row.board_id,
+                "board_name":    row.board_name,
+                "board_label":   row.board_label,
+                "display_order": row.display_order if row.display_order is not None else -1,
+                "is_selected":   bool(row.user_id),
+            }
+            for row in rows
+        ]
+
+        return send_json_response(200, "Boards fetched successfully", data=boards)
+    except Exception:
+        return send_error_response(request, 500, "Internal server error")
+
 async def get_boards(request: Request, db: AsyncSession):
     try:
         user_id = request.state.user.user_id
@@ -137,4 +167,8 @@ async def update_boards(request: Request, body, db: AsyncSession):
         
         return send_json_response(200, "Boards updated successfully", data=boards)
     except Exception:
+        import traceback
+        import sys
+        traceback.print_exc(file=sys.stderr)
+        sys.stderr.flush()
         return send_error_response(request, 500, "Internal server error")

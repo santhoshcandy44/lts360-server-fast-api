@@ -1,6 +1,5 @@
 from pydantic import BaseModel, field_validator
 from typing import Optional, List
-import json
 
 
 class Board(BaseModel):
@@ -29,30 +28,15 @@ class Board(BaseModel):
 
 
 class UpdateBoardsRequest(BaseModel):
-    boards: str
+    boards: List[Board]
 
     @field_validator("boards")
     def validate_boards(cls, v):
-        if not isinstance(v, str):
-            raise ValueError("Boards must be a valid JSON string")
-        try:
-            boards_array = json.loads(v)
-        except Exception:
-            raise ValueError("Boards must be a valid JSON string")
-
-        if not isinstance(boards_array, list):
+        if not isinstance(v, list):
             raise ValueError("Boards must be an array")
 
-        is_any_selected = any(board.get("is_selected") is True for board in boards_array)
+        is_any_selected = any(board.get("is_selected") is True for board in v)
         if not is_any_selected:
             raise ValueError("At least one board must be selected")
-
-        for board in boards_array:
-            if not isinstance(board.get("board_id"), int) or not isinstance(board.get("is_selected"), bool):
-                raise ValueError("Each board must have a valid board_id and is_selected field")
-            if board.get("industry_name") is not None and not isinstance(board.get("industry_name"), str):
-                raise ValueError("Each board must have a valid board_name (if present)")
-            if board.get("industry_name") is not None and not isinstance(board.get("industry_label"), str):
-                raise ValueError("Each board must have a valid board_label (if present)")
-
+        
         return v

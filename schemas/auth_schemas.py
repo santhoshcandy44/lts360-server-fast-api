@@ -2,8 +2,7 @@ from pydantic import BaseModel, EmailStr, field_validator
 from typing import Literal
 import re
 
-
-class RegisterOTPRequest(BaseModel):
+class RegisterOTPSchema(BaseModel):
     email: EmailStr
 
     @field_validator("email")
@@ -12,8 +11,7 @@ class RegisterOTPRequest(BaseModel):
             raise ValueError("Email is required")
         return v
 
-
-class VerifyOTPRequest(BaseModel):
+class VerifyOTPSchema(BaseModel):
     otp:          str
     first_name:   str
     last_name:    str
@@ -70,8 +68,7 @@ class VerifyOTPRequest(BaseModel):
             raise ValueError("Account type is required")
         return v
 
-
-class GoogleSignUpRequest(BaseModel):
+class GoogleSignUpSchema(BaseModel):
     sign_up_method: Literal["google"]
     id_token:       str
     account_type:   Literal["Personal", "Business"]
@@ -97,8 +94,7 @@ class GoogleSignUpRequest(BaseModel):
             raise ValueError("Account type is required")
         return v
 
-
-class EmailSignInRequest(BaseModel):
+class EmailSignInSchema(BaseModel):
     email:    EmailStr
     password: str
 
@@ -117,8 +113,7 @@ class EmailSignInRequest(BaseModel):
             raise ValueError("Password must be between 8 and 16 characters long")
         return v
 
-
-class LTS360SignInRequest(BaseModel):
+class LTS360SignInSchema(BaseModel):
     email:    EmailStr
     password: str
 
@@ -137,8 +132,7 @@ class LTS360SignInRequest(BaseModel):
             raise ValueError("Password must be between 8 and 16 characters long")
         return v
 
-
-class GoogleSignInRequest(BaseModel):
+class GoogleSignInSchema(BaseModel):
     sign_in_method: Literal["google"]
     id_token:       str
 
@@ -156,8 +150,7 @@ class GoogleSignInRequest(BaseModel):
             raise ValueError("ID Token is required")
         return v
 
-
-class GoogleLTS360SignInRequest(BaseModel):
+class GoogleLTS360SignInSchema(BaseModel):
     sign_in_method: Literal["google"]
     id_token:       str
 
@@ -175,8 +168,7 @@ class GoogleLTS360SignInRequest(BaseModel):
             raise ValueError("ID Token is required")
         return v
 
-
-class ForgotPasswordRequest(BaseModel):
+class ForgotPasswordSchema(BaseModel):
     email: EmailStr
 
     @field_validator("email")
@@ -185,8 +177,7 @@ class ForgotPasswordRequest(BaseModel):
             raise ValueError("Email is required")
         return v
 
-
-class ForgotPasswordVerifyOTPRequest(BaseModel):
+class ForgotPasswordVerifyOTPSchema(BaseModel):
     otp:   str
     email: EmailStr
 
@@ -205,8 +196,7 @@ class ForgotPasswordVerifyOTPRequest(BaseModel):
             raise ValueError("Email is required")
         return v
 
-
-class ResetPasswordRequest(BaseModel):
+class ResetPasswordSchema(BaseModel):
     email:    EmailStr
     password: str
 

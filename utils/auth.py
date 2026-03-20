@@ -44,7 +44,7 @@ async def compare_password(password: str, hashed_password: str) -> bool:
 
 def generate_tokens(user_id: int, email: str, sign_up_method: str, last_sign_in, role: str = "User") -> dict:
     payload = {
-        "sub":          user_id,
+        "sub":          str(user_id),
         "userId":       user_id,
         "email":        email,
         "lastSignIn":   str(last_sign_in),
