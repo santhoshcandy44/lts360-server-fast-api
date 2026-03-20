@@ -23,21 +23,21 @@ REFRESH_TOKEN_EXPIRE_DAYS   = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "90"))
 GOOGLE_CLIENT_ID              = os.getenv("GOOGLE_CLIENT_ID")
 
 
-BASE_URL =  os.getenv("BASE_URL", "http://localhost:8000/")
-PROFILE_BASE_URL              = os.getenv("PROFILE_BASE_URL", "http://localhost:8000/media/profiles")
-MEDIA_BASE_URL =  os.getenv("MEDIA_BASE_URL", "http://localhost:8000/media/profiles")
+BASE_URL =  os.getenv("BASE_URL")
+PROFILE_BASE_URL              = os.getenv("PROFILE_BASE_URL")
+MEDIA_BASE_URL =  os.getenv("MEDIA_BASE_URL")
 
 # Google OAuth
 OAUTH_GOOGLE_WEB_CLIENT_ID      = os.getenv("OAUTH_GOOGLE_WEB_CLIENT_ID")
 OAUTH_GOOGLE_ANDROID_CLIENT_ID  = os.getenv("OAUTH_GOOGLE_ANDROID_CLIENT_ID")
 
 # Encryption
-FCM_TOKEN_SECRET                = os.getenv("FCM_TOKEN_SECRET", "fcm-secret")
-PROFILE_PIC_MEDIA_ENCRYPTION    = os.getenv("PROFILE_PIC_MEDIA_ENCRYPTION", "media-secret")
+FCM_TOKEN_SECRET                = os.getenv("FCM_TOKEN_SECRET")
+PROFILE_PIC_MEDIA_ENCRYPTION    = os.getenv("PROFILE_PIC_MEDIA_ENCRYPTION")
 
 # SMTP
 SMTP_HOST     = os.getenv("SMTP_HOST")
-SMTP_PORT     = os.getenv("SMTP_PORT", "587")
+SMTP_PORT     = os.getenv("SMTP_PORT")
 SMTP_USER     = os.getenv("SMTP_USER")
 SMTP_PASSWORD = os.getenv("SMTP_PASSWORD")
 

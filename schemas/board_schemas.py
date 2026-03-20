@@ -27,7 +27,7 @@ class Board(BaseModel):
         return v
 
 
-class UpdateBoardsRequest(BaseModel):
+class UpdateBoardsSchema(BaseModel):
     boards: List[Board]
 
     @field_validator("boards")
@@ -35,8 +35,6 @@ class UpdateBoardsRequest(BaseModel):
         if not isinstance(v, list):
             raise ValueError("Boards must be an array")
 
-        is_any_selected = any(board.get("is_selected") is True for board in v)
-        if not is_any_selected:
-            raise ValueError("At least one board must be selected")
-        
+        if not any(board.is_selected for board in v):
+                raise ValueError("At least one board must be selected")
         return v

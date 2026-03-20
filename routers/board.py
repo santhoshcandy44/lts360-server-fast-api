@@ -4,7 +4,7 @@ from .middleware.auth_middleware import authenticate_token
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from schemas.board_schemas import UpdateBoardsRequest
+from schemas.board_schemas import UpdateBoardsSchema
 from controllers import board_controller
 
 router = APIRouter(
@@ -32,9 +32,9 @@ async def guest_get_boards(
 
 @router.put("/")
 async def update_boards(
-    body:    UpdateBoardsRequest,
+    schema:    UpdateBoardsSchema,
     request: Request,
     db:      AsyncSession = Depends(get_db),
     _:       None = Depends(authenticate_token),
 ):
-    return await board_controller.update_boards(request, body, db)
+    return await board_controller.update_boards(request, schema, db)

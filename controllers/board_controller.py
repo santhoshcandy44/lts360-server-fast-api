@@ -1,8 +1,10 @@
 from fastapi import Request
 
+from schemas.board_schemas import UpdateBoardsSchema
 from sqlmodel import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.dialects.mysql import insert
+from sqlalchemy.orm import selectinload
 
 from models.common import Board
 from models.users import UserBoard
@@ -32,33 +34,31 @@ async def create_default_boards_for_user(user_id: int, db: AsyncSession):
  
     await db.flush()
 
- 
 async def get_boards_by_user_id(request: Request, user_id: int,  db: AsyncSession):
     try:
-        result = await db.execute(
-            select(
-                Board.board_id,
-                Board.board_name,
-                Board.board_label,
-                UserBoard.display_order,
-                UserBoard.user_id,
-            )
-            .outerjoin(UserBoard, (UserBoard.board_id == Board.board_id) & (UserBoard.user_id == user_id))
-        )
-        rows = result.fetchall()
+        all_boards = (await db.execute(
+            select(Board)
+        )).scalars().all()
+
+        user_boards = (await db.execute(
+            select(UserBoard).where(UserBoard.user_id == user_id)
+        )).scalars().all()
+
+        user_board_map = {ub.board_id: ub for ub in user_boards}
 
         boards = [
             {
-                "board_id":      row.board_id,
-                "board_name":    row.board_name,
-                "board_label":   row.board_label,
-                "display_order": row.display_order if row.display_order is not None else -1,
-                "is_selected":   bool(row.user_id),
+                "board_id":      board.board_id,
+                "board_name":    board.board_name,
+                "board_label":   board.board_label,
+                "is_selected":   board.board_id in user_board_map,
+                "display_order": user_board_map[board.board_id].display_order
+                                 if board.board_id in user_board_map else -1,
             }
-            for row in rows
+            for board in all_boards
         ]
 
-        return send_json_response(200, "Boards fetched successfully", data=boards)
+        return boards
     except Exception:
         return send_error_response(request, 500, "Internal server error")
 
@@ -66,31 +66,34 @@ async def get_boards(request: Request, db: AsyncSession):
     try:
         user_id = request.state.user.user_id
 
-        result = await db.execute(
-            select(
-                Board.board_id,
-                Board.board_name,
-                Board.board_label,
-                UserBoard.display_order,
-                UserBoard.user_id,
-            )
-            .outerjoin(UserBoard, (UserBoard.board_id == Board.board_id) & (UserBoard.user_id == user_id))
-        )
-        rows = result.fetchall()
+        all_boards = (await db.execute(
+            select(Board)
+        )).scalars().all()
+
+        user_boards = (await db.execute(
+            select(UserBoard).where(UserBoard.user_id == user_id)
+        )).scalars().all()
+
+        user_board_map = {ub.board_id: ub for ub in user_boards}
 
         boards = [
             {
-                "board_id":      row.board_id,
-                "board_name":    row.board_name,
-                "board_label":   row.board_label,
-                "display_order": row.display_order if row.display_order is not None else -1,
-                "is_selected":   bool(row.user_id),
+                "board_id":      board.board_id,
+                "board_name":    board.board_name,
+                "board_label":   board.board_label,
+                "is_selected":   board.board_id in user_board_map,
+                "display_order": user_board_map[board.board_id].display_order
+                                 if board.board_id in user_board_map else -1,
             }
-            for row in rows
+            for board in all_boards
         ]
 
         return send_json_response(200, "Boards fetched successfully", data=boards)
     except Exception:
+        import traceback
+        import sys
+        traceback.print_exc(file=sys.stderr)
+        sys.stderr.flush()
         return send_error_response(request, 500, "Internal server error")
 
 async def guest_get_boards(request: Request, db: AsyncSession):
@@ -116,11 +119,11 @@ async def guest_get_boards(request: Request, db: AsyncSession):
     except Exception:
         return send_error_response(request, 500, "Internal server error")
 
-async def update_boards(request: Request, body, db: AsyncSession):
+async def update_boards(request: Request, schema:UpdateBoardsSchema, db: AsyncSession):
     try:
         user_id = request.state.user.user_id
 
-        for board in body.boards:
+        for board in schema.boards:
             if board.is_selected:
                 stmt = insert(UserBoard).values(
                     user_id=user_id,
@@ -142,27 +145,26 @@ async def update_boards(request: Request, body, db: AsyncSession):
 
         await db.flush()
 
-        result = await db.execute(
-            select(
-                Board.board_id,
-                Board.board_name,
-                Board.board_label,
-                UserBoard.display_order,
-                UserBoard.user_id,
-            )
-            .outerjoin(UserBoard, (UserBoard.board_id == Board.board_id) & (UserBoard.user_id == user_id))
-        )
-        rows = result.fetchall()
+        all_boards = (await db.execute(
+            select(Board)
+        )).scalars().all()
+
+        user_boards = (await db.execute(
+            select(UserBoard).where(UserBoard.user_id == user_id)
+        )).scalars().all()
+
+        user_board_map = {ub.board_id: ub for ub in user_boards}
 
         boards = [
             {
-                "board_id":      row.board_id,
-                "board_name":    row.board_name,
-                "board_label":   row.board_label,
-                "display_order": row.display_order if row.display_order is not None else -1,
-                "is_selected":   bool(row.user_id),
+                "board_id":      board.board_id,
+                "board_name":    board.board_name,
+                "board_label":   board.board_label,
+                "is_selected":   board.board_id in user_board_map,
+                "display_order": user_board_map[board.board_id].display_order
+                                 if board.board_id in user_board_map else -1,
             }
-            for row in rows
+            for board in all_boards
         ]
         
         return send_json_response(200, "Boards updated successfully", data=boards)

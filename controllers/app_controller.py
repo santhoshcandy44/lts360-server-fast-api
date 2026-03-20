@@ -67,11 +67,6 @@ async def update_e2ee_public_key(request: Request, body, db: AsyncSession):
         await db.execute(stmt)
         return send_json_response(200, "E2EE public key updated successfully")
     except Exception:
-        import traceback
-        import sys
-        traceback.print_exc(file=sys.stderr)
-        sys.stderr.flush()
-
         return send_error_response(request, 500, "Internal server error")
 
 async def get_bookmarks(request: Request, params, db: AsyncSession):

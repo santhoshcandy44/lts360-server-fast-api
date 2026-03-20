@@ -35,7 +35,6 @@ async def generate_salt() -> str:
 async def generate_pepper() -> str:
     return secrets.token_bytes(16).hex()
 
-
 async def hash_password(password: str, salt: str) -> str:
     return bcrypt.hashpw(password.encode(), salt.encode()).decode("utf-8")
 

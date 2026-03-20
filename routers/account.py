@@ -5,11 +5,11 @@ from fastapi import APIRouter, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from schemas.account_schemas import (
-    UpdateAccountTypeRequest,
-    ChangePasswordRequest,
-    ForgotPasswordRequest,
-    ForgotPasswordVerifyOTPRequest,
-    ResetPasswordRequest,
+    UpdateAccountTypeSchema,
+    ChangePasswordSchema,
+    ForgotPasswordSchema,
+    ForgotPasswordVerifyOTPSchema,
+    ResetPasswordSchema,
 )
 
 from  controllers import profile_controller
@@ -20,28 +20,27 @@ router = APIRouter(
     dependencies=[Depends(authenticate_token)],
 )
 
-
 @router.patch("/account-type")
 async def update_account_type(
-    body:    UpdateAccountTypeRequest,
+    schema:    UpdateAccountTypeSchema,
     request: Request,
     db:      AsyncSession = Depends(get_db),
 ):
-    return await profile_controller.update_account_type(request, body, db)
+    return await profile_controller.update_account_type(request, schema, db)
 
 
 @router.put("/change-password")
 async def change_password(
-    body:    ChangePasswordRequest,
+    schema:    ChangePasswordSchema,
     request: Request,
     db:      AsyncSession = Depends(get_db),
 ):
-    return await profile_controller.change_password(request, body, db)
+    return await profile_controller.change_password(request, schema, db)
 
 
 @router.post("/forgot-password/otp")
 async def forgot_password(
-    body:    ForgotPasswordRequest,
+    body:    ForgotPasswordSchema,
     request: Request,
     db:      AsyncSession = Depends(get_db),
 ):
@@ -50,16 +49,16 @@ async def forgot_password(
 
 @router.post("/forgot-password/otp/verify")
 async def forgot_password_otp_verify(
-    body:    ForgotPasswordVerifyOTPRequest,
+    body:    ForgotPasswordVerifyOTPSchema,
     request: Request,
     db:      AsyncSession = Depends(get_db),
 ):
-    return await profile_controller.forgot_password_otp_verify(request, body, db)
+    return await profile_controller.forgot_password_verify_otp(request, body, db)
 
 
 @router.post("/reset-password")
 async def reset_password(
-    body:    ResetPasswordRequest,
+    body:    ResetPasswordSchema,
     request: Request,
     db:      AsyncSession = Depends(get_db),
 ):

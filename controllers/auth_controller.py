@@ -9,7 +9,7 @@ from jose.jwt import get_unverified_claims
 
 from schemas.auth_schemas import EmailSignInSchema, ForgotPasswordSchema, ForgotPasswordVerifyOTPSchema, GoogleLTS360SignInSchema, GoogleSignInSchema, GoogleSignUpSchema, LTS360SignInSchema, RegisterOTPSchema, ResetPasswordSchema, VerifyOTPSchema
 from utils.auth import (
-    generate_tokens, generate_salt, generate_pepper, hash_password,
+    compare_password, generate_tokens, generate_salt, generate_pepper, hash_password,
     generate_forgot_password_token, decode_forgot_password_token,
     verify_id_token, generate_otp, send_otp_email
 )
@@ -17,7 +17,7 @@ from utils.auth import (
 from utils.otp_store import save_otp, get_otp, delete_otp, is_expired
 
 from fastapi import Request
-from sqlmodel import select
+from sqlmodel import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.users import User
@@ -99,9 +99,9 @@ async def verify_otp(request: Request, schema: VerifyOTPSchema, db: AsyncSession
             is_email_verified=1,
             account_type=account_type,
             sign_up_method="legacy_email",
-            hashed_password=hashed_pw,
-            pepper=pepper,
             salt=salt,
+            pepper=pepper,
+            hashed_password=hashed_pw,
             last_sign_in=datetime.now(timezone.utc)
         )
         db.add(new_user)
@@ -170,8 +170,7 @@ async def email_sign_in(request: Request, schema: EmailSignInSchema, db: AsyncSe
         if not existing_user:
             return send_error_response(request, 404, "Invalid user account")
 
-        hashed_attempt = await hash_password(existing_user.pepper + password, existing_user.salt)
-        if hashed_attempt != existing_user.hashed_password:
+        if not await compare_password(existing_user.pepper + password, existing_user.hashed_password):
             return send_error_response(request, 400, "Invalid password")
 
         existing_user = await _update_last_sign_in(existing_user, db)
@@ -226,8 +225,7 @@ async def partner_email_sign_in(request: Request, schema: LTS360SignInSchema, db
         if not existing_user:
             return send_error_response(request, 404, "Invalid user account")
 
-        hashed_attempt = await hash_password(existing_user.pepper + password, existing_user.salt)
-        if hashed_attempt != existing_user.hashed_password:
+        if not await compare_password(existing_user.pepper + password, existing_user.hashed_password):
             return send_error_response(request, 400, "Invalid password")
 
         return send_json_response(200, "User login successfully", data={
@@ -311,7 +309,6 @@ async def forgot_password_verify_otp(request: Request, schema: ForgotPasswordVer
     except Exception:
         return send_error_response(request, 400, "Internal Server Error")
 
-
 async def reset_password(request: Request, schmea: ResetPasswordSchema, db: AsyncSession):
     try:
         password = schmea.password
@@ -332,17 +329,17 @@ async def reset_password(request: Request, schmea: ResetPasswordSchema, db: Asyn
 
         salt      = await generate_salt()
         pepper    = await generate_pepper()
-        hashed_pw = await hash_password(pepper + password, salt)
+        hashed_pw = await hash_password(pepper + schmea.password, salt)
 
-        user.hashed_password = hashed_pw
-        user.salt            = salt
-        user.pepper          = pepper
-        db.add(user)
+        await db.execute(
+            update(User)
+            .where(User.user_id == user_id)
+            .values(salt = salt, pepper = pepper, hashed_password = hashed_pw)
+        )
 
         return send_json_response(200, "Password reset successfully")
     except Exception:
         return send_error_response(request, 400, "Internal Server Error")
-
 
 async def refresh_token(request: Request, db: AsyncSession):
     try:

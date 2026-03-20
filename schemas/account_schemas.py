@@ -2,8 +2,7 @@ from pydantic import BaseModel, EmailStr, field_validator
 from typing import Literal
 import re
 
-
-class UpdateAccountTypeRequest(BaseModel):
+class UpdateAccountTypeSchema(BaseModel):
     account_type: Literal["Personal", "Business"]
 
     @field_validator("account_type")
@@ -13,8 +12,7 @@ class UpdateAccountTypeRequest(BaseModel):
             raise ValueError("Account type is required")
         return v
 
-
-class ChangePasswordRequest(BaseModel):
+class ChangePasswordSchema(BaseModel):
     current_password: str
     new_password:     str
 
@@ -37,7 +35,7 @@ class ChangePasswordRequest(BaseModel):
         return v
 
 
-class ForgotPasswordRequest(BaseModel):
+class ForgotPasswordSchema(BaseModel):
     email: EmailStr
 
     @field_validator("email")
@@ -47,7 +45,7 @@ class ForgotPasswordRequest(BaseModel):
         return v
 
 
-class ForgotPasswordVerifyOTPRequest(BaseModel):
+class ForgotPasswordVerifyOTPSchema(BaseModel):
     email: EmailStr
     otp:   str
 
@@ -67,7 +65,7 @@ class ForgotPasswordVerifyOTPRequest(BaseModel):
         return v
 
 
-class ResetPasswordRequest(BaseModel):
+class ResetPasswordSchema(BaseModel):
     email:        EmailStr
     access_token: str
     password:     str

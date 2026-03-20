@@ -1,8 +1,7 @@
 from pydantic import BaseModel, EmailStr, field_validator
 import re
 
-
-class UpdateFirstNameRequest(BaseModel):
+class UpdateFirstNameSchema(BaseModel):
     first_name: str
 
     @field_validator("first_name")
@@ -15,7 +14,7 @@ class UpdateFirstNameRequest(BaseModel):
         return v
 
 
-class UpdateLastNameRequest(BaseModel):
+class UpdateLastNameSchema(BaseModel):
     last_name: str
 
     @field_validator("last_name")
@@ -28,7 +27,7 @@ class UpdateLastNameRequest(BaseModel):
         return v
 
 
-class UpdateAboutRequest(BaseModel):
+class UpdateAboutSchema(BaseModel):
     about: str
 
     @field_validator("about")
@@ -41,7 +40,7 @@ class UpdateAboutRequest(BaseModel):
         return v
 
 
-class UpdateEmailRequest(BaseModel):
+class UpdateEmailSchema(BaseModel):
     email: EmailStr
 
     @field_validator("email")
@@ -51,7 +50,7 @@ class UpdateEmailRequest(BaseModel):
         return v
 
 
-class UpdateEmailVerifyOTPRequest(BaseModel):
+class UpdateEmailVerifyOTPSchema(BaseModel):
     email: EmailStr
     otp:   str
 
@@ -71,7 +70,7 @@ class UpdateEmailVerifyOTPRequest(BaseModel):
         return v
 
 
-class SendPhoneOTPRequest(BaseModel):
+class SendPhoneOTPSchema(BaseModel):
     phone_number: str
 
     @field_validator("phone_number")
@@ -84,7 +83,7 @@ class SendPhoneOTPRequest(BaseModel):
         return v
 
 
-class VerifyPhoneOTPRequest(BaseModel):
+class VerifyPhoneOTPSchema(BaseModel):
     phone_number: str
     otp:          str
 
@@ -107,7 +106,7 @@ class VerifyPhoneOTPRequest(BaseModel):
         return v
 
 
-class UpdateLocationRequest(BaseModel):
+class UpdateLocationSchema(BaseModel):
     latitude:      float
     longitude:     float
     geo:           str

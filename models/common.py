@@ -1,5 +1,5 @@
-from sqlmodel import SQLModel, Field
-from typing import Optional
+from sqlmodel import SQLModel, Field, Relationship
+from typing import List, Optional
 from datetime import datetime, timezone
 
 class Board(SQLModel, table=True):
