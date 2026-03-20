@@ -1,15 +1,23 @@
 from decimal import Decimal
 import random
-from typing import Optional
+from typing import List, Optional
 from datetime import datetime, timezone
 import string
 
 from sqlmodel import SQLModel, Field, Relationship
-from sqlalchemy import Column, BigInteger, ForeignKey, Numeric, Enum as SAEnum, event
+from sqlalchemy import Column, BigInteger, ForeignKey, Numeric, Enum as SAEnum, event, Index
 from sqlalchemy.orm import Session
 
 class LocalJob(SQLModel, table=True):
     __tablename__ = "local_jobs"
+    __table_args__ = (
+        Index(
+            "ft_local_jobs_title_description",  
+            "title",
+            "description",
+            mysql_prefix="FULLTEXT",            
+        ),
+    )
  
     id:               Optional[int] = Field(primary_key=True)
     local_job_id:     int           = Field(sa_column=Column(BigInteger, unique=True, nullable=False))
@@ -36,6 +44,26 @@ class LocalJob(SQLModel, table=True):
     created_at:       datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at:       datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
 
+    images: List["LocalJobImage"] = Relationship(
+        back_populates="local_job",
+        sa_relationship_kwargs={"lazy": "selectin"}
+    )
+
+    location: Optional["LocalJobLocation"] = Relationship(
+        back_populates="local_job",
+        sa_relationship_kwargs={"lazy": "selectin"}
+    )
+
+    owner: Optional["User"] = Relationship(
+        back_populates="local_jobs",
+        sa_relationship_kwargs={"lazy": "selectin"}
+    )
+
+    bookmarks: List["UserBookmarkLocalJob"] = Relationship(
+        back_populates="local_job",
+        sa_relationship_kwargs={"lazy": "selectin"}
+    )
+
 class LocalJobImage(SQLModel, table=True):
     __tablename__ = "local_job_images"
  
@@ -48,6 +76,11 @@ class LocalJobImage(SQLModel, table=True):
     format:       Optional[str] = Field(default=None, max_length=20)
     created_at:   datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at:   datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+    local_job: Optional["LocalJob"] = Relationship(
+        back_populates="images",        
+        sa_relationship_kwargs={"lazy": "selectin"}
+    )
 
 
 class LocalJobLocation(SQLModel, table=True):
@@ -66,6 +99,12 @@ class LocalJobLocation(SQLModel, table=True):
                                    )
     created_at:    datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at:    datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+    local_job: Optional["LocalJob"] = Relationship(
+        back_populates="location",       
+        sa_relationship_kwargs={"lazy": "selectin"}
+    )
 
 
 class LocalJobSearchQuery(SQLModel, table=True):
@@ -92,7 +131,7 @@ class LocalJobApplicant(SQLModel, table=True):
     created_at:     datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at:     datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
 
-    user: "User" = Relationship(back_populates="local_job_applications")
+    user: "User" = Relationship(back_populates="local_job_applications", sa_relationship_kwargs={"lazy": "selectin"})
 
 def _generate_short_code() -> str:
     chars = string.ascii_letters + string.digits 

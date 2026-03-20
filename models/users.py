@@ -3,7 +3,7 @@ import random
 import string
 
 from decimal import Decimal
-from typing import Optional
+from typing import List, Optional
 
 from models.local_jobs import LocalJobApplicant
 from sqlmodel import SQLModel, Field, Column, Relationship
@@ -57,9 +57,26 @@ class User(SQLModel, table=True):
          sa_relationship_kwargs={"lazy": "selectin"}
     )
 
-    local_job_applications: list["LocalJobApplicant"] = Relationship(
-        back_populates="user"
+    chat_info: Optional["ChatInfo"] = Relationship(
+        back_populates="user",
+        sa_relationship_kwargs={"lazy": "selectin"}
     )
+
+    fcm_token: Optional["FCMToken"] = Relationship(
+        back_populates="user",
+        sa_relationship_kwargs={"lazy": "selectin"}
+    )
+
+    local_jobs: List["LocalJob"] = Relationship(
+        back_populates="owner",         
+        sa_relationship_kwargs={"lazy": "selectin"}
+    )
+
+    local_job_applications: list["LocalJobApplicant"] = Relationship(
+        back_populates="user",
+        sa_relationship_kwargs={"lazy": "selectin"}
+    )
+    
 
 class UserLocation(SQLModel, table=True):
     __tablename__ = "user_locations"
@@ -134,4 +151,8 @@ class FCMToken(SQLModel, table=True):
     fcm_token:  Optional[str] = Field(sa_column=Column(Text))  
     created_at: datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
-     
+
+    user: Optional["User"] = Relationship(
+        back_populates="fcm_token",
+        sa_relationship_kwargs={"lazy": "selectin"}
+    ) 

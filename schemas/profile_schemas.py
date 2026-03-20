@@ -69,7 +69,6 @@ class UpdateEmailVerifyOTPSchema(BaseModel):
             raise ValueError("OTP must be exactly 6 digits and contain only numbers")
         return v
 
-
 class SendPhoneOTPSchema(BaseModel):
     phone_number: str
 
@@ -81,7 +80,6 @@ class SendPhoneOTPSchema(BaseModel):
         if not re.match(r"^\+?[1-9]\d{6,14}$", v):
             raise ValueError("Invalid phone number")
         return v
-
 
 class VerifyPhoneOTPSchema(BaseModel):
     phone_number: str
@@ -104,7 +102,6 @@ class VerifyPhoneOTPSchema(BaseModel):
         if not re.match(r"^\d{6}$", v):
             raise ValueError("OTP must be exactly 6 digits")
         return v
-
 
 class UpdateLocationSchema(BaseModel):
     latitude:      float

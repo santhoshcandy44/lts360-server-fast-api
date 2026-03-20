@@ -1,5 +1,5 @@
 # models/offline_messages.py
-from sqlmodel import SQLModel, Field
+from sqlmodel import SQLModel, Field, Relationship
 from sqlalchemy import Column, BigInteger, Text, ForeignKey, Enum as SAEnum
 from typing import Optional
 from datetime import datetime, timezone
@@ -37,6 +37,11 @@ class ChatInfo(SQLModel, table=True):
     last_active: Optional[datetime] = Field(default=None)
     created_at:  datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at:  datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+    user: Optional["User"] = Relationship(
+        back_populates="chat_info",
+        sa_relationship_kwargs={"lazy": "selectin"}
+    )
 
 class OfflineMessage(SQLModel, table=True):
     __tablename__ = "offline_messages"

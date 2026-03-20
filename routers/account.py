@@ -12,7 +12,7 @@ from schemas.account_schemas import (
     ResetPasswordSchema,
 )
 
-from  controllers import profile_controller
+from  controllers import account_controller
 
 router = APIRouter(
     prefix="/account",
@@ -26,7 +26,7 @@ async def update_account_type(
     request: Request,
     db:      AsyncSession = Depends(get_db),
 ):
-    return await profile_controller.update_account_type(request, schema, db)
+    return await account_controller.update_account_type(request, schema, db)
 
 
 @router.put("/change-password")
@@ -35,7 +35,7 @@ async def change_password(
     request: Request,
     db:      AsyncSession = Depends(get_db),
 ):
-    return await profile_controller.change_password(request, schema, db)
+    return await account_controller.change_password(request, schema, db)
 
 
 @router.post("/forgot-password/otp")
@@ -44,7 +44,7 @@ async def forgot_password(
     request: Request,
     db:      AsyncSession = Depends(get_db),
 ):
-    return await profile_controller.forgot_password(request, body, db)
+    return await account_controller.forgot_password(request, body, db)
 
 
 @router.post("/forgot-password/otp/verify")
@@ -53,7 +53,7 @@ async def forgot_password_otp_verify(
     request: Request,
     db:      AsyncSession = Depends(get_db),
 ):
-    return await profile_controller.forgot_password_verify_otp(request, body, db)
+    return await account_controller.forgot_password_verify_otp(request, body, db)
 
 
 @router.post("/reset-password")
@@ -62,4 +62,4 @@ async def reset_password(
     request: Request,
     db:      AsyncSession = Depends(get_db),
 ):
-    return await profile_controller.reset_password(request, body, db)
+    return await account_controller.reset_password(request, body, db)

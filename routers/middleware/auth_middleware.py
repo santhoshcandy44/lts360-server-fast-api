@@ -39,6 +39,6 @@ async def authenticate_token(
         return existing_user
 
     except AppException:
-        raise
+        raise 
     except Exception:
         raise AppException(500, "Internal server error", "SERVER_ERROR")

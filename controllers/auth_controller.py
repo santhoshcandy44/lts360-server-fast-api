@@ -384,4 +384,8 @@ async def refresh_token(request: Request, db: AsyncSession):
             "refresh_token": tokens["refreshToken"],
         })
     except Exception:
+        import traceback
+        import sys
+        traceback.print_exc(file=sys.stderr)
+        sys.stderr.flush()
         return send_error_response(request, 500, "Internal server error")

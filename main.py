@@ -1,3 +1,5 @@
+from pydantic import ValidationError
+
 from config import APP_NAME
 from contextlib import asynccontextmanager
 from database import init_db, engine
@@ -33,7 +35,6 @@ async def valdiate_app_exception_handler(request: Request, exc: AppException):
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     errors = exc.errors()
-
     if errors:
         first_error = errors[0]
         field   = " -> ".join(str(loc) for loc in first_error["loc"] if loc != "body")

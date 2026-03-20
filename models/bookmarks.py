@@ -1,4 +1,4 @@
-from sqlmodel import SQLModel, Field
+from sqlmodel import SQLModel, Field, Relationship
 from sqlalchemy import Column, BigInteger, ForeignKey, UniqueConstraint
 from typing import Optional
 from datetime import datetime, timezone
@@ -28,6 +28,11 @@ class UserBookmarkLocalJob(SQLModel, table=True):
     local_job_id: int           = Field(sa_column=Column(BigInteger, ForeignKey("local_jobs.local_job_id", ondelete="CASCADE"), nullable=False, index=True))
     created_at:   datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at:   datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+    local_job: Optional["LocalJob"] = Relationship(
+        back_populates="bookmarks",
+        sa_relationship_kwargs={"lazy": "selectin"}
+    )
 
 
 class UserBookmarkUsedProductListing(SQLModel, table=True):

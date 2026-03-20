@@ -4,7 +4,6 @@ from .middleware.auth_middleware import authenticate_token
 
 from fastapi import APIRouter, Depends, Request, UploadFile, File
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing import Optional
 
 from schemas.profile_schemas import (
     UpdateFirstNameSchema,
@@ -71,7 +70,7 @@ async def update_profile_pic(
     ALLOWED_TYPES = {"image/jpg", "image/jpeg", "image/png", "image/webp", "image/gif"}
 
     if profile_pic.content_type not in ALLOWED_TYPES:
-            raise AppException(200, "Invalid profile pic type", "INVALID_IMAGE")
+            raise AppException(422, "Invalid profile pic type", "INVALID_IMAGE")
     contents = await profile_pic.read()
     if len(contents) > MAX_SIZE:
         raise AppException(

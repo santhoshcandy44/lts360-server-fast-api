@@ -1,7 +1,8 @@
-from pydantic import BaseModel, field_validator, model_validator
-from typing import Optional, List, Literal
+from fastapi.exceptions import RequestValidationError
+from pydantic import BaseModel, ValidationError, field_validator, model_validator
+from typing import Annotated, Optional, List
 import json
-
+from fastapi import File, Form, UploadFile
 
 VALID_MARITAL_STATUSES = ['ANY', 'SINGLE', 'MARRIED', 'UNMARRIED', 'WIDOWED']
 VALID_COUNTRIES        = ['IN']
@@ -66,8 +67,8 @@ class GetLocalJobsbSchema(BaseModel):
             raise ValueError("Page size must be a positive integer")
         return v
 
-class CreateOrUpdateLocalJobRequest(BaseModel):
-    local_job_id:     int
+class CreateOrUpdateLocalJobSchema(BaseModel):
+    local_job_id:     int                        = -1
     title:            str
     description:      str
     company:          str
@@ -75,12 +76,13 @@ class CreateOrUpdateLocalJobRequest(BaseModel):
     age_max:          int
     salary_min:       int
     salary_max:       int
-    salary_unit:      Literal["INR", "USD"]
-    marital_statuses: Optional[List[str]] = []
+    salary_unit:      str
+    marital_statuses: Optional[List[str]]        = []
     country:          str
     state:            str
-    keep_image_ids:   Optional[List[int]] = None
+    keep_image_ids:   Optional[List[int]]        = None
     location:         str
+    images:           Optional[List[UploadFile]] = None
 
     @field_validator("title")
     def validate_title(cls, v):
@@ -121,7 +123,7 @@ class CreateOrUpdateLocalJobRequest(BaseModel):
             raise ValueError("Maximum age must be between 18 and 60")
         return v
 
-    @field_validator("marital_statuses", mode="before")
+    @field_validator("marital_statuses")
     def validate_marital_statuses(cls, v):
         if v is None:
             return []
@@ -137,19 +139,13 @@ class CreateOrUpdateLocalJobRequest(BaseModel):
             raise ValueError("Invalid country")
         return v
 
-    @field_validator("keep_image_ids", mode="before")
+    @field_validator("keep_image_ids")
     def validate_keep_image_ids(cls, v):
         if v is None:
             return None
         if not isinstance(v, list):
             v = [v]
-        result = []
-        for id in v:
-            n = int(id)
-            if n != n:  # NaN check
-                raise ValueError("All values must be integers")
-            result.append(n)
-        return result
+        return [int(i) for i in v]
 
     @field_validator("location")
     def validate_location(cls, v):
@@ -167,7 +163,7 @@ class CreateOrUpdateLocalJobRequest(BaseModel):
             raise ValueError("Latitude must be between -90 and 90")
         if not -180 <= float(lng) <= 180:
             raise ValueError("Longitude must be between -180 and 180")
-        return v
+        return parsed
 
     @model_validator(mode="after")
     def validate_age_range(self):
@@ -187,8 +183,61 @@ class CreateOrUpdateLocalJobRequest(BaseModel):
             raise ValueError("Invalid state for India")
         return self
 
-class GetMeLocalJobsRequest(BaseModel):
-    page_size:  Optional[int] = None
+    @model_validator(mode="after")
+    def validate_images_and_keep(self):
+        has_new_images  = self.images and len(self.images) > 0
+        has_kept_images = self.keep_image_ids and len(self.keep_image_ids) > 0
+        if not has_new_images and not has_kept_images:
+            raise ValueError("At least 1 image is required")
+
+        if self.images:
+            for image in self.images:
+                if image.content_type not in ALLOWED_TYPES:
+                    raise ValueError(f"Invalid file type: {image.filename}")
+                if image.size and image.size > MAX_IMAGE_SIZE:
+                    raise ValueError(f"Image {image.filename} must be under 1MB")
+        return self
+
+async def create_or_update_local_job_form(
+    title:            Annotated[str,                  Form(...)],
+    description:      Annotated[str,                  Form(...)],
+    company:          Annotated[str,                  Form(...)],
+    age_min:          Annotated[int,                  Form(...)],
+    age_max:          Annotated[int,                  Form(...)],
+    salary_min:       Annotated[int,                  Form(...)],
+    salary_max:       Annotated[int,                  Form(...)],
+    salary_unit:      Annotated[str,                  Form(...)],
+    country:          Annotated[str,                  Form(...)],
+    state:            Annotated[str,                  Form(...)],
+    location:         Annotated[str,                  Form(...)],
+    local_job_id:     Annotated[int,                  Form()]    = -1,
+    marital_statuses: Annotated[Optional[List[str]],  Form()]    = [],
+    keep_image_ids:   Annotated[Optional[List[int]],  Form()]    = None,
+    images:           Annotated[Optional[List[UploadFile]], File()] = None,
+) -> CreateOrUpdateLocalJobSchema:
+    try:
+        return CreateOrUpdateLocalJobSchema(
+            local_job_id     = local_job_id,
+            title            = title,
+            description      = description,
+            company          = company,
+            age_min          = age_min,
+            age_max          = age_max,
+            salary_min       = salary_min,
+            salary_max       = salary_max,
+            salary_unit      = salary_unit,
+            marital_statuses = marital_statuses,
+            country          = country,
+            state            = state,
+            keep_image_ids   = keep_image_ids,
+            location         = location,
+            images           = images,
+        )
+    except ValidationError as e:
+        raise RequestValidationError(e.errors()) 
+    
+class GetMeLocalJobsSchema(BaseModel):
+    page_size:  Optional[int] = 20
     next_token: Optional[str] = None
 
     @field_validator("page_size")
@@ -231,7 +280,7 @@ class LocalJobApplicationParam(BaseModel):
             raise ValueError("Invalid application id")
         return v
 
-class LocalJobIdParam(BaseModel):
+class LocalJobIdSchema(BaseModel):
     local_job_id: int
 
     @field_validator("local_job_id")
@@ -249,3 +298,7 @@ class SearchSuggestionsRequest(BaseModel):
         if not v:
             raise ValueError("Search query cannot be empty")
         return v
+    
+
+MAX_IMAGE_SIZE    = 1 * 1024 * 1024  
+ALLOWED_TYPES     = ["image/jpeg", "image/png", "image/webp"]
