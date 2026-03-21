@@ -2,11 +2,32 @@ import io
 import json
 import uuid
 from datetime import datetime, timezone
-
 from PIL import Image
 
-from fastapi import Request, UploadFile
-from schemas.service_schemas import CreateServiceSchema, GetMeServicesSchema, GetServicesSchema, GetUserProfileServicesSchema, GuestGetServicesSchema, ServiceIdSchema, UpdateIndustriesSchema, UpdateServiceImagesSchema, UpdateServiceInfoSchema, UpdateServiceLocationSchema, UpdateServicePlansSchema, UpdateServiceThumbnailSchema, UserIdSchema
+from fastapi import Request
+
+from schemas.service_schemas import (
+    GuestGetServicesSchema,
+
+    GetServicesSchema,
+    ServiceIdSchema,
+    GetUserProfileServicesSchema,
+    GetServicesByUserIdSchema,
+
+    CreateServiceSchema,
+    GetPublishedServicesSchema,
+
+    UpdateServiceInfoSchema,
+    UpdateServiceThumbnailSchema,
+    UpdateServiceImagesSchema,
+    UpdateServicePlansSchema,
+    UpdateServiceLocationSchema,
+
+    ServiceSearchSuggestionsSchema,
+    UpdateIndustriesSchema,
+)
+
+
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 from sqlalchemy import func, or_, and_, delete
@@ -56,57 +77,36 @@ def _parse_thumbnail(t: ServiceThumbnail | None) -> dict | None:
 
 def _user_service_summary_response(
     service:  Service,
-    thumbnail: ServiceThumbnail,
-    images:   list[ServiceImage],
-    plans: list[ServicePlan],
-    location: ServiceLocation,
-    owner:        User,
-    chat:         ChatInfo | None =  None,
     is_bookmarked: bool = False,
     distance:     float | None = None,
 ) -> dict:
     return {
          "user": {
-            "user_id":               owner.user_id,
-            "first_name":            owner.first_name,
-            "last_name":             owner.last_name,
-            "is_verified":           bool(owner.is_email_verified),
-            "profile_pic_url":       _fmt_url(PROFILE_BASE_URL, owner.profile_pic_url),
-            "profile_pic_url_small": _fmt_url(PROFILE_BASE_URL, owner.profile_pic_url_96x96),
-            "online":                bool(chat.online) if chat else False,
-            "joined_at":             str(owner.created_at.year) if owner.created_at else None,
+            "user_id":               service.owner.user_id,
+            "first_name":            service.owner.first_name,
+            "last_name":             service.owner.last_name,
+            "is_verified":           bool(service.owner.is_email_verified),
+            "profile_pic_url":       _fmt_url(PROFILE_BASE_URL, service.owner.profile_pic_url),
+            "profile_pic_url_small": _fmt_url(PROFILE_BASE_URL, service.owner.profile_pic_url_96x96),
+            "online":                bool(service.owner.chat_info.online) if service.owner.chat_info else False,
+            "joined_at":             str(service.owner.created_at.year) if service.owner.created_at else None,
         },
           "service": {
             "service_id":        service.service_id,
             "title":             service.title,
             "short_description": service.short_description,
-            "long_description":  service.long_description,
             "industry":          service.industry,
-            "country":           service.country,
-            "state":             service.state,
-            "status":            service.status,
             "slug":              f"{BASE_URL}/service/{service.short_code}",
             "is_bookmarked":     is_bookmarked,
             "distance":          distance,
-            "thumbnail":         _parse_thumbnail(thumbnail),
-            "images": [
-                {
-                    "image_id":  img.id,
-                    "image_url": _fmt_url(MEDIA_BASE_URL, img.image_url),
-                    "width":     img.width,
-                    "height":    img.height,
-                    "size":      img.size,
-                    "format":    img.format,
-                }
-                for img in sorted(images, key=lambda x: x.created_at, reverse=True)
-            ],
-            "plans":    _parse_plans(plans),
+            "thumbnail":         _parse_thumbnail(service.thumbnail),
             "location": {
-                "longitude":     float(location.longitude),
-                "latitude":      float(location.latitude),
-                "geo":           location.geo,
-                "location_type": location.location_type,
-            } if location else None,
+                "geo":           service.location.geo,
+            } if service.location else None,
+            "starting_from": {
+                    "price":      float(min(service.plans, key=lambda p: p.price).price),
+                    "price_unit": min(service.plans, key=lambda p: p.price).price_unit,
+                } if service.plans else None
         }
     }
 
@@ -140,7 +140,6 @@ def _user_service_detail_response(
             "industry":          service.industry,
             "country":           service.country,
             "state":             service.state,
-            "status":            service.status,
             "slug":              f"{BASE_URL}/service/{service.short_code}",
             "is_bookmarked":     is_bookmarked,
             "distance":          distance,
@@ -158,10 +157,7 @@ def _user_service_detail_response(
             ],
             "plans":    _parse_plans(plans),
             "location": {
-                "longitude":     float(location.longitude),
-                "latitude":      float(location.latitude),
                 "geo":           location.geo,
-                "location_type": location.location_type,
             } if location else None,
         }
     }
@@ -435,12 +431,6 @@ async def _query_services(
     jobs = [
     _user_service_summary_response(
         row.Service,
-        row.Service.thumbnail,
-        row.Service.images,
-        row.Service.plans,
-        row.Service.location,
-        row.Service.owner,         
-        row.Service.owner.chat_info, 
         bool(row.is_bookmarked) if user_id else False,
         float(row.distance)     if has_loc else None
     )
@@ -567,18 +557,17 @@ async def get_user_profile_and_services_by_user_id(
 
 async def get_services_by_user_id(
     request: Request,
-    schema: UserIdSchema,
+    schema: GetServicesByUserIdSchema,
     db: AsyncSession,
 ): 
     try:
-        user_id = request.state.user.user_id
         next_token = schema.next_token
         page_size = 1
         payload = decode_cursor(next_token) if next_token else None
 
         q = (
                 select(Service)
-                .where(Service.created_by == user_id)
+                .where(Service.created_by == schema.user_id)
                 .options(
                     selectinload(Service.images),      
                     selectinload(Service.location),   
@@ -610,81 +599,6 @@ async def get_services_by_user_id(
             sys.stderr.flush()
             return send_error_response(request, 500, "Internal server error")
 
-async def get_industries(request: Request, db: AsyncSession):
-    try:
-        result = await db.execute(select(ServiceIndustry))
-        industries = result.scalars().all()
-        return send_json_response(200, "Service industries retrieved", data=[
-            {"industry_id": i.industry_id, "name": i.industry_name, "description": i.description}
-            for i in industries
-        ])
-    except Exception:
-        return send_error_response(request, 500, "Internal server error")
-
-async def get_user_industries(request: Request, db: AsyncSession):
-    try:
-        user_id = request.state.user.user_id
-        user_service_industries = await db.execute(
-            select(UserServiceIndustry.industry_id)
-            .where(UserServiceIndustry.user_id == user_id)
-        )
-        selected_industries_ids = set(user_service_industries.scalars().all())
-
-        result = await db.execute(select(ServiceIndustry))
-        industries = result.scalars().all()
-
-        return send_json_response(200, "Industries retrieved", data=[
-            {
-                "industry_id":   i.industry_id,
-                "name": i.industry_name,
-                "description":   i.description,
-                "is_selected":   i.industry_id in selected_industries_ids  
-            }
-            for i in industries
-        ])
-    except Exception:
-        return send_error_response(request, 500, "Internal server error")
-
-async def update_industries(request: Request, schema: UpdateIndustriesSchema, db: AsyncSession):
-    try:
-        user_id = request.state.user.user_id
-        industry_ids = schema.industries
-
-        await db.execute(delete(UserServiceIndustry).where(UserServiceIndustry.user_id == user_id))
-        await db.flush() 
-
-        if industry_ids:
-            stmt = insert(UserServiceIndustry).values(
-                [{"user_id": user_id, "industry_id": ind_id} for ind_id in industry_ids]
-            )
-            stmt = stmt.on_duplicate_key_update(
-                industry_id=stmt.inserted.industry_id
-            )
-            await db.execute(stmt)
-
-        await db.flush()
-
-        user_service_industries = await db.execute(
-            select(UserServiceIndustry.industry_id)
-            .where(UserServiceIndustry.user_id == user_id)
-        )
-        selected_industries_ids = set(user_service_industries.scalars().all())
-
-        result = await db.execute(select(ServiceIndustry))
-        industries = result.scalars().all()
-
-        return send_json_response(200, "Industries updated", data=[
-            {
-                "industry_id":   i.industry_id,
-                "name": i.industry_name,
-                "description":   i.description,
-                "is_selected":   i.industry_id in selected_industries_ids  
-            }
-            for i in industries
-        ])
-    except Exception as e:
-        return send_error_response(request, 500, "Internal server error")
-    
 async def create_service(
     request: Request,
     schema:  CreateServiceSchema,
@@ -786,9 +700,9 @@ async def create_service(
             await delete_from_s3(key)
         return send_error_response(request, 500, "Internal server error")
 
-async def get_me_services(
+async def get_published_services(
     request: Request,
-    schema: GetMeServicesSchema,
+    schema: GetPublishedServicesSchema,
     db: AsyncSession,
 ):
     try:
@@ -1112,32 +1026,34 @@ async def delete_service(request: Request, schema: ServiceIdSchema, db: AsyncSes
     except Exception:
         return send_error_response(request, 500, "Internal server error")
 
-async def bookmark_service(request: Request, user_id: int, service_id: int, db: AsyncSession):
+async def bookmark_service(request: Request, schema:ServiceIdSchema, db: AsyncSession):
     try:
-        db.add(UserBookmarkService(user_id=user_id, service_id=service_id))
+        user_id = request.state.user.user_id
+        db.add(UserBookmarkService(user_id=user_id, service_id=schema.service_id))
         await db.flush()
         return send_json_response(200, "Bookmarked")
     except Exception:
         return send_error_response(request, 500, "Internal server error")
 
-async def unbookmark_service(request: Request, user_id: int, service_id: int, db: AsyncSession):
+async def unbookmark_service(request: Request, schema:ServiceIdSchema, db: AsyncSession):
     try:
+        user_id = request.state.user.user_id
         bookmark = await db.scalar(
             select(UserBookmarkService).where(
                 UserBookmarkService.user_id == user_id,
-                UserBookmarkService.service_id == service_id,
+                UserBookmarkService.service_id == schema.service_id,
             )
         )
         if not bookmark:
-            return send_error_response(request, 404, "Bookmark not found")
+            return send_error_response(request, 404, "Faield to remove bookmark")
         await db.delete(bookmark)
         return send_json_response(200, "Unbookmarked")
     except Exception:
         return send_error_response(request, 500, "Internal server error")
 
-async def services_search_suggestions(request: Request, query: str, db: AsyncSession):
+async def services_search_suggestions(request: Request, schema: ServiceSearchSuggestionsSchema, db: AsyncSession):
     try:
-        clean = query.strip().lower()
+        clean = schema.query.strip().lower()
         words = clean.split()
         result = await db.execute(
             select(ServiceSearchQuery)
@@ -1153,3 +1069,79 @@ async def services_search_suggestions(request: Request, query: str, db: AsyncSes
         return send_json_response(200, "Suggestions fetched", data=[{"search_term": r.search_term} for r in result.scalars()])
     except Exception:
         return send_error_response(request, 500, "Internal server error")
+    
+async def get_industries(request: Request, db: AsyncSession):
+    try:
+        result = await db.execute(select(ServiceIndustry))
+        industries = result.scalars().all()
+        return send_json_response(200, "Service industries retrieved", data=[
+            {"industry_id": i.industry_id, "name": i.industry_name, "description": i.description}
+            for i in industries
+        ])
+    except Exception:
+        return send_error_response(request, 500, "Internal server error")
+
+async def get_user_industries(request: Request, db: AsyncSession):
+    try:
+        user_id = request.state.user.user_id
+        user_service_industries = await db.execute(
+            select(UserServiceIndustry.industry_id)
+            .where(UserServiceIndustry.user_id == user_id)
+        )
+        selected_industries_ids = set(user_service_industries.scalars().all())
+
+        result = await db.execute(select(ServiceIndustry))
+        industries = result.scalars().all()
+
+        return send_json_response(200, "Industries retrieved", data=[
+            {
+                "industry_id":   i.industry_id,
+                "name": i.industry_name,
+                "description":   i.description,
+                "is_selected":   i.industry_id in selected_industries_ids  
+            }
+            for i in industries
+        ])
+    except Exception:
+        return send_error_response(request, 500, "Internal server error")
+
+async def update_industries(request: Request, schema: UpdateIndustriesSchema, db: AsyncSession):
+    try:
+        user_id = request.state.user.user_id
+        industry_ids = schema.industries
+
+        await db.execute(delete(UserServiceIndustry).where(UserServiceIndustry.user_id == user_id))
+        await db.flush() 
+
+        if industry_ids:
+            stmt = insert(UserServiceIndustry).values(
+                [{"user_id": user_id, "industry_id": ind_id} for ind_id in industry_ids]
+            )
+            stmt = stmt.on_duplicate_key_update(
+                industry_id=stmt.inserted.industry_id
+            )
+            await db.execute(stmt)
+
+        await db.flush()
+
+        user_service_industries = await db.execute(
+            select(UserServiceIndustry.industry_id)
+            .where(UserServiceIndustry.user_id == user_id)
+        )
+        selected_industries_ids = set(user_service_industries.scalars().all())
+
+        result = await db.execute(select(ServiceIndustry))
+        industries = result.scalars().all()
+
+        return send_json_response(200, "Industries updated", data=[
+            {
+                "industry_id":   i.industry_id,
+                "name": i.industry_name,
+                "description":   i.description,
+                "is_selected":   i.industry_id in selected_industries_ids  
+            }
+            for i in industries
+        ])
+    except Exception as e:
+        return send_error_response(request, 500, "Internal server error")
+        

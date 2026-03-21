@@ -1,9 +1,8 @@
 from fastapi.exceptions import RequestValidationError
 from pydantic import BaseModel, ValidationError, field_validator, model_validator
 from typing import Annotated, Optional, List, Literal
-from fastapi import Body, Form, UploadFile, File
+from fastapi import Form, UploadFile, File
 import json
-
 
 VALID_COUNTRIES     = ['IN']
 VALID_INDIAN_STATES = [
@@ -17,24 +16,6 @@ VALID_INDIAN_STATES = [
 
 MAX_IMAGE_SIZE    = 1 * 1024 * 1024  
 ALLOWED_TYPES     = ["image/jpeg", "image/png", "image/webp"]
-
-class UserIdSchema(BaseModel):
-    user_id: int
-
-    @field_validator("user_id")
-    def validate_user_id(cls, v):
-        if v <= 0:
-            raise ValueError("Invalid user id format")
-        return v
-
-class ServiceIdSchema(BaseModel):
-    service_id: int
-
-    @field_validator("service_id")
-    def validate_service_id(cls, v):
-        if v <= 0:
-            raise ValueError("Invalid service id format")
-        return v
 
 class GuestGetServicesSchema(BaseModel):
     s:              Optional[str]        = None
@@ -98,15 +79,13 @@ class GetServicesSchema(BaseModel):
             raise ValueError("Invalid page size format")
         return v
 
-class GetMeServicesSchema(BaseModel):
-    page_size:      Optional[int] = None
-    next_token:     Optional[str] = None
-    previous_token: Optional[str] = None
+class ServiceIdSchema(BaseModel):
+    service_id: int
 
-    @field_validator("page_size")
-    def validate_page_size(cls, v):
-        if v is not None and v <= 0:
-            raise ValueError("Invalid page size format")
+    @field_validator("service_id")
+    def validate_service_id(cls, v):
+        if v <= 0:
+            raise ValueError("Invalid service id format")
         return v
 
 class GetUserProfileServicesSchema(BaseModel):
@@ -257,7 +236,6 @@ class CreateServiceSchema(BaseModel):
                     raise ValueError(f"Image {image.filename} must be under 1MB")
         return self
 
-
 class PlanFeature(BaseModel):
     feature_name:  str
     feature_value: str
@@ -277,6 +255,7 @@ class PlanFeature(BaseModel):
         if len(v) > 10:
             raise ValueError("Feature value must have a maximum length of 10")
         return v
+
 class PlanFeature(BaseModel):
     feature_name:  str
     feature_value: str
@@ -298,7 +277,6 @@ class PlanFeature(BaseModel):
         if len(v) > 10:
             raise ValueError("Feature value cannot exceed 10 characters")
         return v
-
 
 class Plan(BaseModel):
     plan_id:       int = -1
@@ -346,7 +324,6 @@ class Plan(BaseModel):
             raise ValueError("Plan must have between 1 and 10 features")
         return v
     
-
 async def create_service_form(
     title:             str                  = Form(...),
     short_description: str                  = Form(...),
@@ -371,6 +348,17 @@ async def create_service_form(
         images            = images,
         thumbnail         = thumbnail
     )
+
+class GetPublishedServicesSchema(BaseModel):
+    page_size:      Optional[int] = None
+    next_token:     Optional[str] = None
+    previous_token: Optional[str] = None
+
+    @field_validator("page_size")
+    def validate_page_size(cls, v):
+        if v is not None and v <= 0:
+            raise ValueError("Invalid page size format")
+        return v
 
 class UpdateServiceInfoSchema(BaseModel):
     service_id:        int = 0 
@@ -552,7 +540,6 @@ class UpdateServiceLocationSchema(BaseModel):
             raise ValueError("Location type cannot be empty")
         return v
 
-
 class UpdateIndustriesSchema(BaseModel):
     industries: List[int]
 
@@ -562,7 +549,7 @@ class UpdateIndustriesSchema(BaseModel):
             raise ValueError("At least 1 industry is required")
         return v
     
-class SearchSuggestionsSchema(BaseModel):
+class ServiceSearchSuggestionsSchema(BaseModel):
     query: str
 
     @field_validator("query")
@@ -571,4 +558,3 @@ class SearchSuggestionsSchema(BaseModel):
         if not v:
             raise ValueError("Query cannot be empty")
         return v
-

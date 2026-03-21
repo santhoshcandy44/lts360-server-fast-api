@@ -1,5 +1,3 @@
-from pydantic import ValidationError
-
 from config import APP_NAME
 from contextlib import asynccontextmanager
 from database import init_db, engine
