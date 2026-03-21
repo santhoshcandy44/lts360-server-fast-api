@@ -82,6 +82,11 @@ class User(SQLModel, table=True):
         sa_relationship_kwargs={"lazy": "selectin"}
     )
 
+    services: List["Service"] = Relationship(
+        back_populates="owner",         
+        sa_relationship_kwargs={"lazy": "selectin"}
+    )
+
 class UserLocation(SQLModel, table=True):
     __tablename__ = "user_locations"
  
@@ -126,8 +131,12 @@ class UserServiceIndustry(SQLModel, table=True):
     industry_id: int           = Field(sa_column=Column(Integer, ForeignKey("service_industries.industry_id", ondelete="CASCADE"), nullable=False, index=True))
     created_at:  datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at:  datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
-     
 
+    industry: Optional["ServiceIndustry"] = Relationship(
+        back_populates="user_service_industries",
+        sa_relationship_kwargs={"lazy": "selectin"}
+    )
+         
 def _generate_short_code() -> str:
     chars = string.ascii_letters + string.digits 
     return ''.join(random.choices(chars, k=6))

@@ -1,6 +1,7 @@
-from pydantic import BaseModel, field_validator, model_validator
-from typing import Optional, List, Literal
-from fastapi import Form, UploadFile, File
+from fastapi.exceptions import RequestValidationError
+from pydantic import BaseModel, ValidationError, field_validator, model_validator
+from typing import Annotated, Optional, List, Literal
+from fastapi import Body, Form, UploadFile, File
 import json
 
 
@@ -14,80 +15,10 @@ VALID_INDIAN_STATES = [
     "Telangana", "Tripura", "Uttar Pradesh", "Uttarakhand", "West Bengal"
 ]
 
+MAX_IMAGE_SIZE    = 1 * 1024 * 1024  
+ALLOWED_TYPES     = ["image/jpeg", "image/png", "image/webp"]
 
-# ──────────────────────────────────────────────
-# Shared sub-models
-# ──────────────────────────────────────────────
-
-class PlanFeature(BaseModel):
-    feature_name:  str
-    feature_value: str
-
-    @field_validator("feature_name")
-    def validate_feature_name(cls, v):
-        if not isinstance(v, str):
-            raise ValueError("Feature name must be a string")
-        if len(v) > 40:
-            raise ValueError("Feature name must have a maximum length of 40")
-        return v
-
-    @field_validator("feature_value")
-    def validate_feature_value(cls, v):
-        if not isinstance(v, str):
-            raise ValueError("Feature value must be a string")
-        if len(v) > 10:
-            raise ValueError("Feature value must have a maximum length of 10")
-        return v
-
-
-class Plan(BaseModel):
-    plan_id:            int
-    plan_name:          str
-    plan_description:   str
-    plan_price:         float
-    price_unit:         Literal["INR", "USD"]
-    plan_delivery_time: int
-    duration_unit:      Literal["HR", "D", "W", "M"]
-    plan_features:      List[PlanFeature]
-
-    @field_validator("plan_name")
-    def validate_plan_name(cls, v):
-        if not isinstance(v, str):
-            raise ValueError("Plan name must be a string")
-        if len(v) > 20:
-            raise ValueError("Plan name cannot exceed 20 characters")
-        return v
-
-    @field_validator("plan_description")
-    def validate_plan_description(cls, v):
-        if not isinstance(v, str):
-            raise ValueError("Plan description must be a string")
-        if len(v) > 500:
-            raise ValueError("Plan description cannot exceed 500 characters")
-        return v
-
-    @field_validator("plan_features")
-    def validate_plan_features(cls, v):
-        if not 1 <= len(v) <= 10:
-            raise ValueError("Plan features must be a non-empty array with max 10 features")
-        return v
-
-
-# ──────────────────────────────────────────────
-# Path param models
-# ──────────────────────────────────────────────
-
-class ServiceIdParam(BaseModel):
-    service_id: int
-
-    @field_validator("service_id")
-    def validate_service_id(cls, v):
-        if v <= 0:
-            raise ValueError("Invalid service id format")
-        return v
-
-
-class UserIdParam(BaseModel):
+class UserIdSchema(BaseModel):
     user_id: int
 
     @field_validator("user_id")
@@ -96,12 +27,16 @@ class UserIdParam(BaseModel):
             raise ValueError("Invalid user id format")
         return v
 
+class ServiceIdSchema(BaseModel):
+    service_id: int
 
-# ──────────────────────────────────────────────
-# Query param models
-# ──────────────────────────────────────────────
+    @field_validator("service_id")
+    def validate_service_id(cls, v):
+        if v <= 0:
+            raise ValueError("Invalid service id format")
+        return v
 
-class GuestGetServicesRequest(BaseModel):
+class GuestGetServicesSchema(BaseModel):
     s:              Optional[str]        = None
     latitude:       Optional[float]      = None
     longitude:      Optional[float]      = None
@@ -143,8 +78,7 @@ class GuestGetServicesRequest(BaseModel):
             raise ValueError("Invalid page size format")
         return v
 
-
-class GetServicesRequest(BaseModel):
+class GetServicesSchema(BaseModel):
     s:              Optional[str] = None
     page_size:      Optional[int] = None
     next_token:     Optional[str] = None
@@ -164,8 +98,7 @@ class GetServicesRequest(BaseModel):
             raise ValueError("Invalid page size format")
         return v
 
-
-class GetMeServicesRequest(BaseModel):
+class GetMeServicesSchema(BaseModel):
     page_size:      Optional[int] = None
     next_token:     Optional[str] = None
     previous_token: Optional[str] = None
@@ -176,45 +109,41 @@ class GetMeServicesRequest(BaseModel):
             raise ValueError("Invalid page size format")
         return v
 
-
-class GetUserProfileServicesRequest(BaseModel):
+class GetUserProfileServicesSchema(BaseModel):
+    user_id: int
     page_size: Optional[int] = None
 
+    @field_validator("user_id")
+    def validate_user_id(cls, v):
+        if v <= 0:
+            raise ValueError("Invalid user id")
+        return v
+    
     @field_validator("page_size")
     def validate_page_size(cls, v):
         if v is not None and v <= 0:
             raise ValueError("Invalid page size format")
         return v
 
-
-class GetServicesByUserIdRequest(BaseModel):
+class GetServicesByUserIdSchema(BaseModel):
+    user_id: int
     page_size:      Optional[int] = None
     next_token:     Optional[str] = None
     previous_token: Optional[str] = None
 
+    @field_validator("user_id")
+    def validate_user_id(cls, v):
+        if v <= 0:
+            raise ValueError("Invalid user id")
+        return v
+    
     @field_validator("page_size")
     def validate_page_size(cls, v):
         if v is not None and v <= 0:
             raise ValueError("Invalid page size format")
         return v
 
-
-class SearchSuggestionsRequest(BaseModel):
-    query: str
-
-    @field_validator("query")
-    def validate_query(cls, v):
-        v = v.strip()
-        if not v:
-            raise ValueError("Query cannot be empty")
-        return v
-
-
-# ──────────────────────────────────────────────
-# Body models
-# ──────────────────────────────────────────────
-
-class CreateServiceRequest(BaseModel):
+class CreateServiceSchema(BaseModel):
     title:             str
     short_description: str
     long_description:  str
@@ -223,6 +152,8 @@ class CreateServiceRequest(BaseModel):
     state:             str
     plans:             str
     location:          str
+    images:            List[UploadFile] = None
+    thumbnail:         UploadFile= None
 
     @field_validator("title")
     def validate_title(cls, v):
@@ -249,6 +180,12 @@ class CreateServiceRequest(BaseModel):
             raise ValueError("Long Description cannot be empty")
         if not 1 <= len(v) <= 5000:
             raise ValueError("Long Description must be between 1 and 5000 characters")
+        return v
+    
+    @field_validator("industry")
+    def validate_industry(cls, v):
+        if v <= 0:
+            raise ValueError("Invalid industry")
         return v
 
     @field_validator("country")
@@ -268,7 +205,7 @@ class CreateServiceRequest(BaseModel):
         for plan in parsed:
             if not isinstance(plan, dict):
                 raise ValueError("Each plan must be an object")
-        return v
+        return parsed
 
     @field_validator("location")
     def validate_location(cls, v):
@@ -288,7 +225,7 @@ class CreateServiceRequest(BaseModel):
             raise ValueError("Latitude must be a number between -90 and 90")
         if not -180 <= float(lng) <= 180:
             raise ValueError("Longitude must be a number between -180 and 180")
-        return v
+        return parsed
 
     @model_validator(mode="after")
     def validate_state(self):
@@ -296,6 +233,119 @@ class CreateServiceRequest(BaseModel):
             raise ValueError("State must be a valid state of India")
         return self
 
+    @model_validator(mode="after")
+    def validate_thumbnail(self):
+        if not self.thumbnail:
+            raise ValueError("Thumbnail is required")
+
+        if self.thumbnail:
+            if self.thumbnail.content_type not in ALLOWED_TYPES:
+                raise ValueError(f"Invalid file type: {self.thumbnail.filename}")
+            if self.thumbnail.size and self.thumbnail.size > MAX_IMAGE_SIZE:
+                raise ValueError(f"Thumbnail must be under 1MB")
+        return self
+    
+    @model_validator(mode="after")
+    def validate_images(self):
+        if not self.images:
+            raise ValueError("At least 1 image is required")
+        if self.images:
+            for image in self.images:
+                if image.content_type not in ALLOWED_TYPES:
+                    raise ValueError(f"Invalid file type: {image.filename}")
+                if image.size and image.size > MAX_IMAGE_SIZE:
+                    raise ValueError(f"Image {image.filename} must be under 1MB")
+        return self
+
+
+class PlanFeature(BaseModel):
+    feature_name:  str
+    feature_value: str
+
+    @field_validator("feature_name")
+    def validate_feature_name(cls, v):
+        if not isinstance(v, str):
+            raise ValueError("Feature name must be a string")
+        if len(v) > 40:
+            raise ValueError("Feature name must have a maximum length of 40")
+        return v
+
+    @field_validator("feature_value")
+    def validate_feature_value(cls, v):
+        if not isinstance(v, str):
+            raise ValueError("Feature value must be a string")
+        if len(v) > 10:
+            raise ValueError("Feature value must have a maximum length of 10")
+        return v
+class PlanFeature(BaseModel):
+    feature_name:  str
+    feature_value: str
+
+    @field_validator("feature_name")
+    def validate_feature_name(cls, v):
+        v = v.strip()
+        if not v:
+            raise ValueError("Feature name cannot be empty")
+        if len(v) > 40:
+            raise ValueError("Feature name cannot exceed 40 characters")
+        return v
+
+    @field_validator("feature_value")
+    def validate_feature_value(cls, v):
+        v = v.strip()
+        if not v:
+            raise ValueError("Feature value cannot be empty")
+        if len(v) > 10:
+            raise ValueError("Feature value cannot exceed 10 characters")
+        return v
+
+
+class Plan(BaseModel):
+    plan_id:       int = -1
+    name:          str
+    description:   str
+    price:    float
+    price_unit:    Literal["INR", "USD"]
+    delivery_time: int
+    duration_unit: Literal["HR", "D", "W", "M"]
+    features: List[PlanFeature]
+
+    @field_validator("name")
+    def validate_name(cls, v):
+        v = v.strip()
+        if not v:
+            raise ValueError("Plan name cannot be empty")
+        if len(v) > 20:
+            raise ValueError("Plan name cannot exceed 20 characters")
+        return v
+
+    @field_validator("description")
+    def validate_description(cls, v):
+        v = v.strip()
+        if not v:
+            raise ValueError("Plan description cannot be empty")
+        if len(v) > 500:
+            raise ValueError("Plan description cannot exceed 500 characters")
+        return v
+
+    @field_validator("price")
+    def validate_price(cls, v):
+        if v <= 0:
+            raise ValueError("Plan price must be greater than 0")
+        return v
+
+    @field_validator("delivery_time")
+    def validate_delivery_time(cls, v):
+        if v <= 0:
+            raise ValueError("Plan delivery time must be greater than 0")
+        return v
+
+    @field_validator("features")
+    def validate_features(cls, v):
+        if not 1 <= len(v) <= 10:
+            raise ValueError("Plan must have between 1 and 10 features")
+        return v
+    
 
 async def create_service_form(
     title:             str                  = Form(...),
@@ -306,8 +356,10 @@ async def create_service_form(
     state:             str                  = Form(...),
     plans:             str                  = Form(...),
     location:          str                  = Form(...),
-) -> CreateServiceRequest:
-    return CreateServiceRequest(
+    images:            List[UploadFile]     = Form(...),
+    thumbnail:         UploadFile           = Form(...)
+) -> CreateServiceSchema:
+    return CreateServiceSchema(
         title             = title,
         short_description = short_description,
         long_description  = long_description,
@@ -316,10 +368,12 @@ async def create_service_form(
         state             = state,
         plans             = plans,
         location          = location,
+        images            = images,
+        thumbnail         = thumbnail
     )
 
-
-class UpdateServiceInfoRequest(BaseModel):
+class UpdateServiceInfoSchema(BaseModel):
+    service_id:        int = 0 
     title:             str
     short_description: str
     long_description:  str
@@ -351,22 +405,68 @@ class UpdateServiceInfoRequest(BaseModel):
         if not 1 <= len(v) <= 5000:
             raise ValueError("Long Description must be between 1 and 5000 characters")
         return v
-
-
-class UpdateServiceThumbnailRequest(BaseModel):
-    image_id: int
-
-    @field_validator("image_id")
-    def validate_image_id(cls, v):
-        if not isinstance(v, int):
-            raise ValueError("Image ID must be a valid integer")
+    
+    @field_validator("industry")
+    def validate_industry(cls, v):
+        if v <= 0:
+            raise ValueError("Invalid industry")
         return v
 
+class UpdateServiceThumbnailSchema(BaseModel):
+    service_id: int
+    thumbnail_id: int
+    thumbnail:    UploadFile= None
 
-class UpdateServiceImagesRequest(BaseModel):
+    @field_validator("service_id")
+    def validate_service_id(cls, v):
+        if v <= 0:
+            raise ValueError("Invalid service id format")
+        return v
+
+    @field_validator("thumbnail_id")
+    def validate_image_id(cls, v):
+        if not isinstance(v, int):
+            raise ValueError("Thumbnail ID must be a valid integer")
+        return v
+    
+    @model_validator(mode="after")
+    def validate_thumbnail(self):
+        if not self.thumbnail:
+            raise ValueError("Thumbnail is required")
+
+        if self.thumbnail:
+            if self.thumbnail.content_type not in ALLOWED_TYPES:
+                raise ValueError(f"Invalid file type: {self.thumbnail.filename}")
+            if self.thumbnail.size and self.thumbnail.size > MAX_IMAGE_SIZE:
+                raise ValueError(f"Thumbnail must be under 1MB")
+        return self
+
+async def update_thumbnail_form(
+    service_id: int,    
+    thumbnail_id:            Annotated[int, Form(...)],
+    thumbnail:           Annotated[Optional[UploadFile], File()] = None,
+) -> UpdateServiceThumbnailSchema:
+    try:
+        return UpdateServiceThumbnailSchema(
+            service_id          = service_id,
+            thumbnail_id        = thumbnail_id,
+            thumbnail           = thumbnail,
+        )
+    except ValidationError as e:
+        raise RequestValidationError(e.errors()) 
+
+class UpdateServiceImagesSchema(BaseModel):
+    service_id: int
     keep_image_ids: Optional[List[int]] = None
+    images:                 Optional[List[UploadFile]] = None
 
-    @field_validator("keep_image_ids", mode="before")
+    @field_validator("service_id")
+    def validate_service_id(cls, v):
+        if v <= 0:
+            raise ValueError("Invalid service id format")
+        return v
+
+    @field_validator("keep_image_ids")
     def validate_keep_image_ids(cls, v):
         if v is None:
             return None
@@ -377,34 +477,50 @@ class UpdateServiceImagesRequest(BaseModel):
             n = int(id)
             result.append(n)
         return result
+    
+    @model_validator(mode="after")
+    def validate_images_and_keep(self):
+        has_new_images  = self.images and len(self.images) > 0
+        has_kept_images = self.keep_image_ids and len(self.keep_image_ids) > 0
+        if not has_new_images and not has_kept_images:
+            raise ValueError("At least 1 image is required")
 
+        if self.images:
+            for image in self.images:
+                if image.content_type not in ALLOWED_TYPES:
+                    raise ValueError(f"Invalid file type: {image.filename}")
+                if image.size and image.size > MAX_IMAGE_SIZE:
+                    raise ValueError(f"Image {image.filename} must be under 1MB")
+        return self
 
 async def update_service_images_form(
-    keep_image_ids: Optional[List[int]] = Form(default=None),
-) -> UpdateServiceImagesRequest:
-    return UpdateServiceImagesRequest(
-        keep_image_ids = keep_image_ids,
-    )
-
-
-class UpdateServicePlansRequest(BaseModel):
-    plans: str
+    service_id: int,
+    keep_image_ids: Annotated[List[int], Form(...)],
+    images:           Annotated[List[UploadFile], File()] = None,
+) -> UpdateServiceImagesSchema:
+    try:
+        return UpdateServiceImagesSchema(
+            service_id          = service_id,
+            keep_image_ids      = keep_image_ids,
+            images              = images,
+        )
+    except ValidationError as e:
+        raise RequestValidationError(e.errors())
+    
+class UpdateServicePlansSchema(BaseModel):
+    service_id: int = 0
+    plans: List[Plan]
 
     @field_validator("plans")
     def validate_plans(cls, v):
-        try:
-            parsed = json.loads(v)
-        except Exception:
-            raise ValueError("Plans must be a valid JSON array")
-        if not isinstance(parsed, list) or not 1 <= len(parsed) <= 3:
-            raise ValueError("Plans must be 1-3 array")
-        for plan in parsed:
-            if not isinstance(plan, dict):
-                raise ValueError("Each plan must be an object")
+        if len(v) < 1:
+            raise ValueError("At least 1 plan is required")
+        if len(v) > 3:
+            raise ValueError("Maximum 3 plans allowed")
         return v
 
-
-class UpdateServiceLocationRequest(BaseModel):
+class UpdateServiceLocationSchema(BaseModel):
+    service_id: int = 0
     latitude:      float
     longitude:     float
     geo:           str
@@ -437,15 +553,22 @@ class UpdateServiceLocationRequest(BaseModel):
         return v
 
 
-class UpdateIndustriesRequest(BaseModel):
-    industries: str
+class UpdateIndustriesSchema(BaseModel):
+    industries: List[int]
 
     @field_validator("industries")
     def validate_industries(cls, v):
+        if not v:
+            raise ValueError("At least 1 industry is required")
+        return v
+    
+class SearchSuggestionsSchema(BaseModel):
+    query: str
+
+    @field_validator("query")
+    def validate_query(cls, v):
         v = v.strip()
         if not v:
-            raise ValueError("Industries cannot be empty")
+            raise ValueError("Query cannot be empty")
         return v
 
-class UpdateIndustriesRequest(BaseModel):
-    industries: str

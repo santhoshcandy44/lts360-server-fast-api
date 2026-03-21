@@ -22,8 +22,6 @@ from helpers.response_helper import send_json_response, send_error_response
 from utils.pagination.cursor import encode_cursor, decode_cursor
 from utils.aws_s3 import upload_to_s3, delete_from_s3, delete_directory_from_s3
 
-
-# ── Shared helpers ────────────────────────────────────────────────────────────
 def _fmt_url(base, path):
     return f"{base}/{path}" if path else None
 
@@ -79,7 +77,7 @@ def _used_product_listing_user_summary_response(
         }
     }
 
-def _used_product_listing_response(
+def _used_product_listing_detail_response(
     used_product_listing:  UsedProductListing,
     images:   list[UsedProductListingImage],
     location: UsedProductListingLocation,
@@ -201,8 +199,6 @@ def _published_used_product_listing_response(
 
 def _paginate_used_product_listings(items: list, used_product_listing:UsedProductListing | None, lastDistance: int | None, lastTotalRelavance: int | None,  page_size: int,  next_token: str = None ) -> dict:
     has_next       = len(items) == page_size and used_product_listing is not None
-    print(lastDistance)
-
     next_token_out = encode_cursor({
         "created_at":      str(used_product_listing.created_at),
         "id":              used_product_listing.id,
@@ -514,7 +510,6 @@ async def get_profile_and_used_product_listings(
     except Exception:
             return send_error_response(request, 500, "Internal server error")
 
-
 async def get_used_product_listings_by_user_id(
     request: Request,
     schema: GetUsedProductListingsByUserIdSchema,
@@ -554,10 +549,6 @@ async def get_used_product_listings_by_user_id(
                 data=_paginate_used_product_listings_by_used_product_listing(items, last_row, page_size, next_token if payload else None)
                 )
     except Exception:
-            import traceback
-            import sys
-            traceback.print_exc(file=sys.stderr)
-            sys.stderr.flush()
             return send_error_response(request, 500, "Internal server error")
 
 async def create_or_update_used_product_listing(
@@ -712,22 +703,17 @@ async def get_me_used_product_listings(
 async def delete_used_product_listing(request: Request, schema: UsedProductListingIdParam, db: AsyncSession):
     try:
         user    = request.state.user
-        listing = await db.scalar(select(UsedProductListing).where(UsedProductListing.used_product_listing_id == schema.used_product_listing_id, UsedProductListing.created_by == user.user_id))
-        if not listing:
+        usedProductListing = await db.scalar(select(UsedProductListing).where(UsedProductListing.used_product_listing_id == schema.used_product_listing_id, UsedProductListing.created_by == user.user_id))
+        if not usedProductListing:
             return send_error_response(request, 404, "Used product listing not exist")
 
         media = await db.scalar(select(User.media_id).where(User.user_id == user.user_id))
-        await db.delete(listing)
+        await db.delete(usedProductListing)
         if media:
             await delete_directory_from_s3(f"media/{media}/used-product-listings/{schema.used_product_listing_id}")
         return send_json_response(200, "Listing deleted")
     except Exception:
-        import traceback
-        import sys
-        traceback.print_exc(file=sys.stderr)
-        sys.stderr.flush()
         return send_error_response(request, 500, "Internal server error")
-
 
 async def bookmark_used_product_listing(request: Request, schema: UsedProductListingIdParam, db: AsyncSession):
     try:
@@ -736,7 +722,6 @@ async def bookmark_used_product_listing(request: Request, schema: UsedProductLis
         return send_json_response(200, "Bookmarked")
     except Exception:
         return send_error_response(request, 500, "Internal server error")
-
 
 async def unbookmark_used_product_listing(request: Request, schema: UsedProductListingIdParam, db: AsyncSession):
     try:
@@ -747,7 +732,6 @@ async def unbookmark_used_product_listing(request: Request, schema: UsedProductL
         return send_json_response(200, "Bookmark removed")
     except Exception:
         return send_error_response(request, 500, "Internal server error")
-
 
 async def used_product_listings_search_suggestions(request: Request, schema:UsedProductSearchSuggestionsSchema, db: AsyncSession):
     try:

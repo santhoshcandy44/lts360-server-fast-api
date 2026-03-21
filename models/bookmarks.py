@@ -15,7 +15,10 @@ class UserBookmarkService(SQLModel, table=True):
     created_at: datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
 
-
+    service: Optional["Service"] = Relationship(
+        back_populates="bookmarks",
+        sa_relationship_kwargs={"lazy": "selectin"}
+    )
 
 class UserBookmarkLocalJob(SQLModel, table=True):
     __tablename__ = "user_bookmark_local_jobs"

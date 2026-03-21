@@ -234,7 +234,6 @@ class CreateOrUpdateUsedProductListingSchema(BaseModel):
         return self
 
 
-
 async def create_or_update_used_product_listing_form(
     used_product_listing_id: int                  = Form(...),
     name:                    str                  = Form(...),
