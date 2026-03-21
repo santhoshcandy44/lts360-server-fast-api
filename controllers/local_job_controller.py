@@ -5,10 +5,10 @@ from datetime import datetime, timezone
 from PIL import Image
 
 from fastapi import Request
-from schemas.local_job_schemas import GetLocalJobsbSchema, CreateOrUpdateLocalJobSchema, GetMeLocalJobsSchema, LocalJobIdSchema, GetLocalJobApplicationsRequest, GuestGetLocalJobsSchema, LocalJobApplicationParam, SearchSuggestionsRequest
+from schemas.local_job_schemas import GetLocalJobsbSchema, CreateOrUpdateLocalJobSchema, GetMeLocalJobsSchema, LocalJobIdSchema, GetLocalJobApplicationsSchema, GuestGetLocalJobsSchema, LocalJobApplicationSchema, SearchSuggestionsSchema
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
-from sqlalchemy import or_, and_, update, text, func
+from sqlalchemy import or_, and_, update, func
 from sqlalchemy.dialects.mysql import insert, match
 from sqlalchemy.orm import selectinload
 
@@ -81,7 +81,7 @@ def _job_summary_response(
             ],
             "location": {
                 "longitude":     float(location.longitude),
-                "latitude":      float(location.longitude),
+                "latitude":      float(location.latitude),
                 "geo":           location.geo,
                 "location_type": location.location_type,
             } if location else None,
@@ -140,7 +140,7 @@ def _job_response(
             ],
             "location": {
                 "longitude":     float(location.longitude),
-                "latitude":      float(location.longitude),
+                "latitude":      float(location.latitude),
                 "geo":           location.geo,
                 "location_type": location.location_type,
             } if location else None,
@@ -180,12 +180,11 @@ def _published_job_response(
             ],
             "location": {
                 "longitude":     float(location.longitude),
-                "latitude":      float(location.longitude),
+                "latitude":      float(location.latitude),
                 "geo":           location.geo,
                 "location_type": location.location_type,
             } if location else None,
     }
-
 
 def _paginate_jobs(items: list, last_local_job:LocalJob | None, lastDistance: int | None, lastTotalRelavance: int | None,  page_size: int,  next_token: str = None ) -> dict:
     has_next       = len(items) == page_size and last_local_job is not None
@@ -201,13 +200,11 @@ def _paginate_jobs(items: list, last_local_job:LocalJob | None, lastDistance: in
         "previous_token": next_token if next_token else None,
     }
 
-def _paginate(items: list, last_row, page_size: int, next_token: str = None ) -> dict:
-    has_next       = len(items) == page_size and last_row is not None
+def _paginate_me_jobs(items: list, last_local_job:LocalJob | None, page_size: int, next_token: str = None ) -> dict:
+    has_next       = len(items) == page_size and last_local_job is not None
     next_token_out = encode_cursor({
-        "created_at":      str(last_row.created_at),
-        "id":              last_row.id,
-        "distance":        float(getattr(last_row, "distance", None)) if  getattr(last_row, "distance", None) is not None else None,
-        "total_relevance": float( getattr(last_row, "total_relevance", None)) if  getattr(last_row, "total_relevance", None) is not None else None,
+        "created_at":      str(last_local_job.created_at),
+        "id":              last_local_job.id
     }) if has_next else None
     return {
         "data":           items,
@@ -235,8 +232,8 @@ def _relevance(query: str):
 
 async def _query_jobs(
     db:        AsyncSession,
-    user_id:   int,
     page_size: int,
+    user_id:   int | None = None,
     query:     str | None = None,
     user_lat:  float | None = None,
     user_lon:  float | None = None,
@@ -336,30 +333,30 @@ async def _query_jobs(
                 and_(LocalJob.created_at == payload["created_at"], LocalJob.id > payload["id"]),
             ))
 
-        if has_loc and query:
-            q = q.order_by(
-                distance_expr.asc(),
-                relevance_expr.desc(),
-                LocalJob.created_at.desc(),
-                LocalJob.id.asc()
-            )
-        elif has_loc:
-            q = q.order_by(
-                distance_expr.asc(),
-                LocalJob.created_at.desc(),
-                LocalJob.id.asc()
-            )
-        elif query:
-            q = q.order_by(
-                relevance_expr.desc(),
-                LocalJob.created_at.desc(),
-                LocalJob.id.asc()
-            )
-        else:
-            q = q.order_by(
-                LocalJob.created_at.desc(),
-                LocalJob.id.asc()
-            )
+    if has_loc and query:
+        q = q.order_by(
+            distance_expr.asc(),
+            relevance_expr.desc(),
+            LocalJob.created_at.desc(),
+            LocalJob.id.asc()
+        )
+    elif has_loc:
+        q = q.order_by(
+            distance_expr.asc(),
+            LocalJob.created_at.desc(),
+            LocalJob.id.asc()
+        )
+    elif query:
+        q = q.order_by(
+            relevance_expr.desc(),
+            LocalJob.created_at.desc(),
+            LocalJob.id.asc()
+        )
+    else:
+        q = q.order_by(
+            LocalJob.created_at.desc(),
+            LocalJob.id.asc()
+        )
 
     q = q.limit(page_size)
 
@@ -368,7 +365,7 @@ async def _query_jobs(
     last_row  = None
 
     last_row = rows[-1] if rows else None
-                    
+
     jobs = [
     _job_summary_response(
         row.LocalJob,
@@ -393,8 +390,16 @@ async def _query_jobs(
 
 async def guest_get_local_jobs(request: Request, schema: GuestGetLocalJobsSchema, db: AsyncSession):
     try:
-    
-        return send_json_response(200, "Local jobs fetched", data= None)
+        s = schema.s
+        page_size = 1
+        next_token = schema.next_token
+        
+        lat = schema.latitude
+        lon = schema.longitude
+
+        data = await _query_jobs(db=db, page_size=page_size, query=s, user_lat=lat, user_long=lon, next_token=next_token)
+
+        return send_json_response(200, "Local jobs fetched", data= data)
     except Exception:
         return send_error_response(request, 500, "Internal server error")
 
@@ -405,13 +410,69 @@ async def get_local_jobs(request: Request, schema: GetLocalJobsbSchema, db: Asyn
         next_token = schema.next_token
 
         user_id = request.state.user.user_id    
-        
+
         loc = await db.scalar(select(UserLocation).where(UserLocation.user_id == user_id))
         lat, lon = (float(loc.latitude), float(loc.longitude)) if loc else (None, None)
 
-        data = await _query_jobs(db, user_id, page_size, s, lat, lon, next_token)
-
+        data = await _query_jobs(db=db, user_id=user_id, page_size=page_size, query=s, user_lat=lat, user_lon=lon, next_token=next_token)
         return send_json_response(200, "Local jobs fetched", data= data)
+    except Exception:
+        return send_error_response(request, 500, "Internal server error")
+
+async def guest_get_local_job(request: Request, schema: LocalJobIdSchema, db: AsyncSession):
+    try:
+        job = await db.scalar(
+            select(LocalJob)
+            .options(
+                selectinload(LocalJob.location),
+                selectinload(LocalJob.images),
+                selectinload(LocalJob.owner)
+            )
+            .where(LocalJob.local_job_id == schema.local_job_id)
+        )
+
+        if not job:
+            return send_error_response(request, 404, "Local job not exist")
+
+        return send_json_response(200, "Local job retrived", data=_job_response(
+            job,
+            images=job.images,
+            location=job.location,
+            owner=job.owner
+        ))
+    except Exception:
+        return send_error_response(request, 500, "Internal server error")
+
+async def get_local_job(request: Request, schema: LocalJobIdSchema, db: AsyncSession):
+    try:
+        user_id = request.state.user.user_id
+        job = await db.scalar(
+            select(LocalJob)
+            .options(
+                selectinload(LocalJob.images),
+                selectinload(LocalJob.location),
+                selectinload(LocalJob.owner),
+            )
+            .where(LocalJob.local_job_id == schema.local_job_id)
+        )
+
+        if not job:
+            return send_error_response(request, 404, "Local job not exist")
+        
+        is_applied = await db.scalar(
+            select(LocalJobApplicant)
+            .where(LocalJobApplicant.local_job_id == schema.local_job_id)
+            .where(LocalJobApplicant.candidate_id == str(user_id))
+            ) is not None
+
+        return send_json_response(200, "Local job retrived", data=_job_response(
+            job=job,
+            images=job.images,
+            location=job.location,
+            owner = job.owner,
+            chat=job.owner.chat_info,
+            is_applied=bool(is_applied),
+        ))
     except Exception:
         import traceback
         import sys
@@ -419,88 +480,28 @@ async def get_local_jobs(request: Request, schema: GetLocalJobsbSchema, db: Asyn
         sys.stderr.flush()
         return send_error_response(request, 500, "Internal server error")
 
-async def guest_get_local_job(request: Request, local_job_id: int, db: AsyncSession):
+async def apply_local_job(request: Request, schema: LocalJobIdSchema, db: AsyncSession):
     try:
+        user_id = request.state.user.user_id
         job = await db.scalar(
-            select(LocalJob)
-            .options(
-                selectinload(LocalJob.location),
-                selectinload(LocalJob.images),
-                selectinload(LocalJob.applicants) 
-            )
-            .where(LocalJob.local_job_id == local_job_id)
-        )
-
-        if not job:
-            return send_error_response(request, 404, "Local job not exist")
-
-        return send_json_response(200, "Local job retrived", data=_job_response(
-            job,
-            owner=job.created_by,  
-            images=job.images,
-            location=job.location,
-            chat=None, 
-        ))
-    except Exception:
-        return send_error_response(request, 500, "Internal server error")
-
-async def get_local_job(request: Request, params: LocalJobIdSchema, db: AsyncSession):
-    try:
-        user_id = request.state.suer.user_id
-        local_job_id = params.local_job_id
-        job = await db.scalar(
-            select(LocalJob)
-            .options(
-                selectinload(LocalJob.location),
-                selectinload(LocalJob.images),
-                selectinload(LocalJob.applicants) 
-            )
-            .where(LocalJob.local_job_id == local_job_id)
-        )
-
-        if not job:
-            return send_error_response(request, 404, "Local job not exist")
-        
-        is_applied = await db.scalar(
-        select(LocalJobApplicant)
-        .where(LocalJobApplicant.local_job_id == local_job_id)
-        .where(LocalJobApplicant.candidate_id == str(user_id))
-        ) is not None
-
-        return send_json_response(200, "Local job retrived", data=_job_response(
-            job,
-            owner=job.created_by,  
-            images=job.images,
-            location=job.location,
-            chat=None, 
-            is_applied=bool(is_applied),
-        ))
-    except Exception:
-        return send_error_response(request, 500, "Internal server error")
-
-async def apply_local_job(request: Request, params: LocalJobIdSchema, db: AsyncSession):
-    try:
-        user_id = request.state.user_id
-        local_job_id = params.local_job_id
-        job = await db.scalar(
-            select(LocalJob).where(LocalJob.local_job_id == local_job_id)
+            select(LocalJob).where(LocalJob.local_job_id == schema.local_job_id)
         )
         if not job:
             return send_error_response(request, 404, "Local job not exist")
-        applicant= LocalJobApplicant(
+        applicant = LocalJobApplicant(
             candidate_id=user_id,
-            local_job_id=local_job_id,
+            local_job_id=schema.local_job_id
         )
         db.add(applicant)
         await db.flush() 
         
-        kafka_key = f"{local_job_id}:{job.created_by}:{user_id}"
-        send_local_job_applicant_applied_notification_to_kafka(kafka_key, {
-            "user_id":         job.created_by,
-            "candidate_id":    user_id,
-            "local_job_title": job.title,
-            "application_id":  applicant.application_id,
-        })
+        # kafka_key = f"{schema.local_job_id}:{schema.job.created_by}:{user_id}"
+        # send_local_job_applicant_applied_notification_to_kafka(kafka_key, {
+        #     "user_id":         job.created_by,
+        #     "candidate_id":    user_id,
+        #     "local_job_title": job.title,
+        #     "application_id":  applicant.application_id,
+        # })
         return send_json_response(200, "Applied successfully")
     except Exception:
         return send_error_response(request, 500, "Internal server error")
@@ -662,8 +663,8 @@ async def get_me_local_jobs(
     return send_json_response(
         200,
         "Local jobs retrieved",
-        data=_paginate(items, last_row, page_size, next_token if payload else None)
-    )
+        data=_paginate_me_jobs(items, getattr(last_row, "LocalJob", None), page_size, next_token if payload else None)
+        )
 
 async def delete_local_job(request: Request, schema: LocalJobIdSchema, db: AsyncSession):
     try:
@@ -689,12 +690,12 @@ async def delete_local_job(request: Request, schema: LocalJobIdSchema, db: Async
 
 async def get_local_job_applications(
     request: Request,
-    params: GetLocalJobApplicationsRequest,
+    schema: GetLocalJobApplicationsSchema,
     db: AsyncSession,
 ):
-    local_job_id = params.local_job_id,
-    page_size = params.page_size
-    next_token =  params.next_token
+    local_job_id = schema.local_job_id,
+    page_size = schema.page_size
+    next_token =  schema.next_token
 
     payload   = decode_cursor(next_token) if next_token else None
 
@@ -726,14 +727,14 @@ async def get_local_job_applications(
 
     rows = (await db.execute(q)).scalars().all()
 
-    items = []
+    applications = []
     last_row = None
 
-    for i, applicant in enumerate(rows):
+    for applicant in rows:
         u  = applicant.user
         ul = u.location if u else None
 
-        items.append({
+        applications.append({
             "application_id": applicant.application_id,
             "applied_at": applicant.applied_at,
             "is_reviewed": bool(applicant.is_reviewed),
@@ -763,72 +764,66 @@ async def get_local_job_applications(
         "is_reviewed": last_row.is_reviewed,
         "reviewed_at": str(last_row.reviewed_at),
         "id": last_row.id,
-    }) if len(items) == page_size and last_row else None
+    }) if len(applications) == page_size and last_row else None
 
     return send_json_response(200, "Applications fetched", data={
-        "data": items,
+        "data": applications,
         "next_token": next_token_out,
         "previous_token": next_token if payload else None,
     })
 
-async def mark_as_reviewed(request: Request, params: LocalJobApplicationParam, db: AsyncSession):
+async def mark_as_reviewed(request: Request, schema: LocalJobApplicationSchema, db: AsyncSession):
     try:
         user_id = request.state.user.user_id
-        local_job_id = params.user_id
-        application_id = params.application_id
         job = await db.scalar(
-            select(LocalJob).where(LocalJob.local_job_id == local_job_id, LocalJob.created_by == user_id)
-        )
-        if not job:
-            return send_error_response(request, 404, "Local job not found")
-
-        await db.execute(
-            update(LocalJobApplicant)
-            .where(LocalJobApplicant.local_job_id == local_job_id, LocalJobApplicant.application_id == application_id)
-            .values(is_reviewed=1, reviewed_at=datetime.now(timezone.utc))
-        )
-        return send_json_response(200, "Marked as reviewed")
-    except Exception:
-        return send_error_response(request, 500, "Internal server error")
-
-async def unmark_as_reviewed(request: Request, params: LocalJobApplicationParam, db: AsyncSession):
-    try:
-        user_id = request.state.user.user_id
-        local_job_id = params.user_id
-        application_id = params.application_id
-        
-        job = await db.scalar(
-            select(LocalJob).where(LocalJob.local_job_id == local_job_id, LocalJob.created_by == user_id)
+            select(LocalJob).where(LocalJob.local_job_id == schema.local_job_id, LocalJob.created_by == user_id)
         )
         if not job:
             return send_error_response(request, 404, "Local job not exist")
 
         await db.execute(
             update(LocalJobApplicant)
-            .where(LocalJobApplicant.local_job_id == local_job_id, LocalJobApplicant.application_id == application_id)
+            .where(LocalJobApplicant.local_job_id == schema.local_job_id, LocalJobApplicant.application_id == schema.application_id)
+            .values(is_reviewed=1, reviewed_at=datetime.now(timezone.utc))
+        )
+        return send_json_response(200, "Marked as reviewed")
+    except Exception:
+        return send_error_response(request, 500, "Internal server error")
+
+async def unmark_as_reviewed(request: Request, schema: LocalJobApplicationSchema, db: AsyncSession):
+    try:
+        user_id = request.state.user.user_id
+        
+        job = await db.scalar(
+            select(LocalJob).where(LocalJob.local_job_id == schema.local_job_id, LocalJob.created_by == user_id)
+        )
+        if not job:
+            return send_error_response(request, 404, "Local job not exist")
+
+        await db.execute(
+            update(LocalJobApplicant)
+            .where(LocalJobApplicant.local_job_id == schema.local_job_id, LocalJobApplicant.application_id == schema.application_id)
             .values(is_reviewed=0, reviewed_at=None)
         )
         return send_json_response(200, "Unmarked as reviewed")
     except Exception:
         return send_error_response(request, 500, "Internal server error")
     
-async def bookmark_local_job(request: Request, params:LocalJobIdSchema, db: AsyncSession):
+async def bookmark_local_job(request: Request, schema:LocalJobIdSchema, db: AsyncSession):
     try:
         user_id = request.state.user.user_id
-        local_job_id = params.user_id
-        db.add(UserBookmarkLocalJob(user_id=user_id, local_job_id=local_job_id))
+        db.add(UserBookmarkLocalJob(user_id=user_id, local_job_id=schema.local_job_id))
         return send_json_response(200, "Bookmarked")
     except Exception:
         return send_error_response(request, 500, "Internal server error")
 
-async def unbookmark_local_job(request: Request, params: LocalJobIdSchema, db: AsyncSession):
+async def unbookmark_local_job(request: Request, schema: LocalJobIdSchema, db: AsyncSession):
     try:
         user_id = request.state.user.user_id
-        local_job_id = params.user_id
         bookmark = await db.scalar(
             select(UserBookmarkLocalJob).where(
                 UserBookmarkLocalJob.user_id == user_id,
-                UserBookmarkLocalJob.local_job_id == local_job_id,
+                UserBookmarkLocalJob.local_job_id == schema.local_job_id,
             )
         )
         if not bookmark:
@@ -838,9 +833,9 @@ async def unbookmark_local_job(request: Request, params: LocalJobIdSchema, db: A
     except Exception:
         return send_error_response(request, 500, "Internal server error")
     
-async def local_jobs_search_queries(request: Request, params: SearchSuggestionsRequest, db: AsyncSession):
+async def local_jobs_search_suggestions(request: Request, schema: SearchSuggestionsSchema, db: AsyncSession):
     try:
-        query = params.query
+        query = schema.query
         clean = query.strip().lower()
         words = clean.split()
         result = await db.execute(
@@ -850,10 +845,10 @@ async def local_jobs_search_queries(request: Request, params: SearchSuggestionsR
                 *[LocalJobSearchQuery.search_term.ilike(f"%{w}%") for w in words],
                 LocalJobSearchQuery.search_term_concatenated.ilike(f"{clean.replace(' ', '')}%"),
             ))
-            .where(LocalJobSearchQuery.popularity > 10)
+            .where(LocalJobSearchQuery.popularity > 1)
             .order_by(LocalJobSearchQuery.popularity.desc())
             .limit(10)
         )
-        return send_json_response(200, "Suggestions retrieved", data=[r.search_term for r in result.scalars()])
+        return send_json_response(200, "Suggestions retrieved", data=[{"search_term": r.search_term} for r in result.scalars()])
     except Exception:
         return send_error_response(request, 500, "Internal server error")

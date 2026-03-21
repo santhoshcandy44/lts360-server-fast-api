@@ -72,11 +72,15 @@ class User(SQLModel, table=True):
         sa_relationship_kwargs={"lazy": "selectin"}
     )
 
-    local_job_applications: list["LocalJobApplicant"] = Relationship(
+    application: list["LocalJobApplicant"] = Relationship(
         back_populates="user",
         sa_relationship_kwargs={"lazy": "selectin"}
     )
-    
+        
+    used_product_listings: List["UsedProductListing"] = Relationship(
+        back_populates="owner",         
+        sa_relationship_kwargs={"lazy": "selectin"}
+    )
 
 class UserLocation(SQLModel, table=True):
     __tablename__ = "user_locations"

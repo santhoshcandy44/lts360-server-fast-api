@@ -10,22 +10,40 @@ from config import (
 
 # ── S3 Client Session ─────────────────────────────────────────────────────────
 def _get_session():
-    return aioboto3.Session(
-        aws_access_key_id     = S3_BUCKET_ACCESS_KEY,
-        aws_secret_access_key = S3_BUCKET_SECRET_KEY,
-        region_name           = S3_BUCKET_REGION,
+   return aioboto3.Session(
+        aws_access_key_id='test',
+        aws_secret_access_key='test',
+        region_name='us-east-1' 
     )
 
 
+    # return aioboto3.Session(
+    #     aws_access_key_id     = S3_BUCKET_ACCESS_KEY,
+    #     aws_secret_access_key = S3_BUCKET_SECRET_KEY,
+    #     region_name           = S3_BUCKET_REGION,
+    # )
+
+
 # ── Build S3 URL ──────────────────────────────────────────────────────────────
+
+S3_BUCKET_NAME = "test-bucket"
+S3_ENDPOINT_URL = "http://localhost:5000"
+
 def build_s3_url(key: str) -> str:
-    return f"https://{S3_BUCKET_NAME}.s3.{S3_BUCKET_REGION}.amazonaws.com/{key}"
+    """
+    Returns a URL to access a file in the local Moto S3 bucket.
+    This mimics the standard S3 URL format.
+    """
+    return f"{S3_ENDPOINT_URL}/{S3_BUCKET_NAME}/{key}"
+
+# def build_s3_url(key: str) -> str:
+#     return f"https://{S3_BUCKET_NAME}.s3.{S3_BUCKET_REGION}.amazonaws.com/{key}"
 
 
 # ── Enable Versioning ─────────────────────────────────────────────────────────
 async def enable_versioning(bucket_name: str):
     try:
-        async with _get_session().client("s3") as s3:
+        async with _get_session().client("s3", endpoint_url='http://localhost:5000') as s3:
             await s3.put_bucket_versioning(
                 Bucket=bucket_name,
                 VersioningConfiguration={"Status": "Enabled"},
@@ -38,7 +56,7 @@ async def enable_versioning(bucket_name: str):
 # ── Upload to S3 ──────────────────────────────────────────────────────────────
 async def upload_to_s3(buffer: bytes, key: str, content_type: str) -> dict:
     try:
-        async with _get_session().client("s3") as s3:
+        async with _get_session().client("s3", endpoint_url='http://localhost:5000') as s3:
             await s3.put_object(
                 Bucket=S3_BUCKET_NAME,
                 Key=key,
@@ -56,7 +74,7 @@ async def upload_to_s3(buffer: bytes, key: str, content_type: str) -> dict:
 # ── Delete from S3 ────────────────────────────────────────────────────────────
 async def delete_from_s3(key: str):
     try:
-        async with _get_session().client("s3") as s3:
+        async with _get_session().client("s3", endpoint_url='http://localhost:5000') as s3:
             await s3.delete_object(Bucket=S3_BUCKET_NAME, Key=key)
     except Exception as e:
         raise Exception(f"Error deleting from S3: {e}")
@@ -65,7 +83,7 @@ async def delete_from_s3(key: str):
 # ── Delete Directory from S3 ──────────────────────────────────────────────────
 async def delete_directory_from_s3(s3_key: str):
     try:
-        async with _get_session().client("s3") as s3:
+        async with _get_session().client("s3",  endpoint_url='http://localhost:5000') as s3:
             listed = await s3.list_objects_v2(Bucket=S3_BUCKET_NAME, Prefix=s3_key)
             contents = listed.get("Contents", [])
             if contents:
@@ -80,7 +98,7 @@ async def delete_directory_from_s3(s3_key: str):
 # ── Stream S3 File ────────────────────────────────────────────────────────────
 async def stream_s3_file(key: str) -> StreamingResponse | Response:
     try:
-        async with _get_session().client("s3") as s3:
+        async with _get_session().client("s3", endpoint_url='http://localhost:5000') as s3:
 
             # head request — get metadata
             head = await s3.head_object(Bucket=S3_BUCKET_NAME, Key=key)

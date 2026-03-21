@@ -59,6 +59,8 @@ class LocalJob(SQLModel, table=True):
         sa_relationship_kwargs={"lazy": "selectin"}
     )
 
+    applications: List["LocalJobApplicant"] = Relationship(back_populates="local_job", sa_relationship_kwargs={"lazy": "selectin"})
+
     bookmarks: List["UserBookmarkLocalJob"] = Relationship(
         back_populates="local_job",
         sa_relationship_kwargs={"lazy": "selectin"}
@@ -111,8 +113,8 @@ class LocalJobSearchQuery(SQLModel, table=True):
     __tablename__ = "local_job_search_queries"
 
     id:                       Optional[int] = Field(primary_key=True)
-    search_term:              str           = Field(max_length=255)
-    search_term_concatenated: str           = Field(max_length=255)
+    search_term:              str           = Field(max_length=255, unique=True)
+    search_term_concatenated: str           = Field(max_length=255, unique=True)
     popularity:               int           = Field(default=1)
     last_searched:            datetime      = Field()
     created_at:               datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
@@ -131,7 +133,8 @@ class LocalJobApplicant(SQLModel, table=True):
     created_at:     datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at:     datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
 
-    user: "User" = Relationship(back_populates="local_job_applications", sa_relationship_kwargs={"lazy": "selectin"})
+    user: "User" = Relationship(back_populates="application", sa_relationship_kwargs={"lazy": "selectin"})
+    local_job: "LocalJob" = Relationship(back_populates="applications", sa_relationship_kwargs={"lazy": "selectin"})
 
 def _generate_short_code() -> str:
     chars = string.ascii_letters + string.digits 

@@ -15,6 +15,26 @@ VALID_INDIAN_STATES    = [
     "Telangana", "Tripura", "Uttar Pradesh", "Uttarakhand", "West Bengal"
 ]
 
+class GetLocalJobsbSchema(BaseModel):
+    s:          Optional[str] = None
+    page_size:  Optional[int] = None
+    next_token: Optional[str] = None
+
+    @field_validator("s")
+    def validate_s(cls, v):
+        if v is not None:
+            v = v.strip()
+            if len(v) > 100:
+                raise ValueError("Search must be between 0 and 100 characters")
+        return v
+
+    @field_validator("page_size")
+    def validate_page_size(cls, v):
+        if v is not None and v <= 0:
+            raise ValueError("Page size must be a positive integer")
+        return v
+
+
 class GuestGetLocalJobsSchema(BaseModel):
     s:          Optional[str]   = None
     latitude:   Optional[float] = None
@@ -40,25 +60,6 @@ class GuestGetLocalJobsSchema(BaseModel):
     def validate_longitude(cls, v):
         if v is not None and not -180 <= v <= 180:
             raise ValueError("Longitude must be between -180 and 180")
-        return v
-
-    @field_validator("page_size")
-    def validate_page_size(cls, v):
-        if v is not None and v <= 0:
-            raise ValueError("Page size must be a positive integer")
-        return v
-
-class GetLocalJobsbSchema(BaseModel):
-    s:          Optional[str] = None
-    page_size:  Optional[int] = None
-    next_token: Optional[str] = None
-
-    @field_validator("s")
-    def validate_s(cls, v):
-        if v is not None:
-            v = v.strip()
-            if len(v) > 100:
-                raise ValueError("Search must be between 0 and 100 characters")
         return v
 
     @field_validator("page_size")
@@ -246,7 +247,7 @@ class GetMeLocalJobsSchema(BaseModel):
             raise ValueError("Page size must be a positive integer")
         return v
       
-class GetLocalJobApplicationsRequest(BaseModel):
+class GetLocalJobApplicationsSchema(BaseModel):
     local_job_id:   int
     page_size:  Optional[int] = None
     next_token: Optional[str] = None
@@ -264,7 +265,7 @@ class GetLocalJobApplicationsRequest(BaseModel):
             raise ValueError("Page size must be a positive integer")
         return v
 
-class LocalJobApplicationParam(BaseModel):
+class LocalJobApplicationSchema(BaseModel):
     local_job_id:   int
     application_id: int
 
@@ -289,7 +290,7 @@ class LocalJobIdSchema(BaseModel):
             raise ValueError("Invalid local job id")
         return v    
 
-class SearchSuggestionsRequest(BaseModel):
+class SearchSuggestionsSchema(BaseModel):
     query: str
 
     @field_validator("query")

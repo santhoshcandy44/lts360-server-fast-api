@@ -46,4 +46,9 @@ class UserBookmarkUsedProductListing(SQLModel, table=True):
     used_product_listing_id: int           = Field(sa_column=Column(BigInteger, ForeignKey("used_product_listings.used_product_listing_id", ondelete="CASCADE"), nullable=False, index=True))
     created_at:              datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at:              datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+    used_product_listing: Optional["UsedProductListing"] = Relationship(
+        back_populates="bookmarks",
+        sa_relationship_kwargs={"lazy": "selectin"}
+    )
     

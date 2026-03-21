@@ -1,8 +1,7 @@
 from pydantic import BaseModel, field_validator, model_validator
-from typing import Optional, List, Literal
-from fastapi import Form
+from typing import Annotated, Optional, List, Literal
+from fastapi import Form, UploadFile , File
 import json
-
 
 VALID_COUNTRIES     = ['IN', 'USA']
 VALID_INDIAN_STATES = [
@@ -14,8 +13,10 @@ VALID_INDIAN_STATES = [
     "Telangana", "Tripura", "Uttar Pradesh", "Uttarakhand", "West Bengal"
 ]
 
+MAX_IMAGE_SIZE    = 1 * 1024 * 1024  
+ALLOWED_TYPES     = ["image/jpeg", "image/png", "image/webp"]
 
-class GuestGetUsedProductListingsRequest(BaseModel):
+class GuestGetUsedProductListingsSchema(BaseModel):
     s:              Optional[str]   = None
     latitude:       Optional[float] = None
     longitude:      Optional[float] = None
@@ -50,7 +51,7 @@ class GuestGetUsedProductListingsRequest(BaseModel):
         return v
 
 
-class GetUsedProductListingsRequest(BaseModel):
+class GetUsedProductListingsSchema(BaseModel):
     s:              Optional[str] = None
     page_size:      Optional[int] = None
     next_token:     Optional[str] = None
@@ -71,7 +72,7 @@ class GetUsedProductListingsRequest(BaseModel):
         return v
 
 
-class GetUsedProductListingsByUserIdRequest(BaseModel):
+class GetUsedProductListingsByUserIdSchema(BaseModel):
     page_size:      Optional[int] = None
     next_token:     Optional[str] = None
     previous_token: Optional[str] = None
@@ -83,9 +84,16 @@ class GetUsedProductListingsByUserIdRequest(BaseModel):
         return v
 
 
-class GetUserProfileRequest(BaseModel):
+class GetUserProfileSchema(BaseModel):
+    user_id: int
     page_size: Optional[int] = None
 
+    @field_validator("user_id")
+    def validate_user_id(cls, v):
+        if v <= 0:
+            raise ValueError("Invalid user id")
+        return v
+
     @field_validator("page_size")
     def validate_page_size(cls, v):
         if v is not None and v <= 0:
@@ -93,7 +101,7 @@ class GetUserProfileRequest(BaseModel):
         return v
 
 
-class GetMeUsedProductListingsRequest(BaseModel):
+class GetMeUsedProductListingsSchema(BaseModel):
     page_size:      Optional[int] = None
     next_token:     Optional[str] = None
     previous_token: Optional[str] = None
@@ -105,7 +113,7 @@ class GetMeUsedProductListingsRequest(BaseModel):
         return v
 
 
-class UsedProductSearchSuggestionsRequest(BaseModel):
+class UsedProductSearchSuggestionsSchema(BaseModel):
     query: str
 
     @field_validator("query")
@@ -136,7 +144,7 @@ class UserIdParam(BaseModel):
         return v
 
 
-class CreateOrUpdateUsedProductListingRequest(BaseModel):
+class CreateOrUpdateUsedProductListingSchema(BaseModel):
     used_product_listing_id: int
     name:                    str
     description:             str
@@ -146,6 +154,7 @@ class CreateOrUpdateUsedProductListingRequest(BaseModel):
     price:                   float
     price_unit:              Literal["INR", "USD"]
     location:                str
+    images:                  Optional[List[UploadFile]] = None
 
     @field_validator("name")
     def validate_name(cls, v):
@@ -201,13 +210,29 @@ class CreateOrUpdateUsedProductListingRequest(BaseModel):
             raise ValueError("Latitude must be between -90 and 90")
         if not -180 <= float(lng) <= 180:
             raise ValueError("Longitude must be between -180 and 180")
-        return v
+        return parsed  
 
     @model_validator(mode="after")
     def validate_state(self):
         if self.country == "IN" and self.state not in VALID_INDIAN_STATES:
             raise ValueError("Invalid state for India")
         return self
+    
+    @model_validator(mode="after")
+    def validate_images_and_keep(self):
+        has_new_images  = self.images and len(self.images) > 0
+        has_kept_images = self.keep_image_ids and len(self.keep_image_ids) > 0
+        if not has_new_images and not has_kept_images:
+            raise ValueError("At least 1 image is required")
+
+        if self.images:
+            for image in self.images:
+                if image.content_type not in ALLOWED_TYPES:
+                    raise ValueError(f"Invalid file type: {image.filename}")
+                if image.size and image.size > MAX_IMAGE_SIZE:
+                    raise ValueError(f"Image {image.filename} must be under 1MB")
+        return self
+
 
 
 async def create_or_update_used_product_listing_form(
@@ -220,8 +245,9 @@ async def create_or_update_used_product_listing_form(
     price_unit:              str                  = Form(...),
     location:                str                  = Form(...),
     keep_image_ids:          Optional[List[int]]  = Form(default=None),
-) -> CreateOrUpdateUsedProductListingRequest:
-    return CreateOrUpdateUsedProductListingRequest(
+    images:           Annotated[Optional[List[UploadFile]], File()] = None,
+) -> CreateOrUpdateUsedProductListingSchema:
+    return CreateOrUpdateUsedProductListingSchema(
         used_product_listing_id = used_product_listing_id,
         name                    = name,
         description             = description,
@@ -231,4 +257,5 @@ async def create_or_update_used_product_listing_form(
         price_unit              = price_unit,
         location                = location,
         keep_image_ids          = keep_image_ids,
+        images                  = images
     )

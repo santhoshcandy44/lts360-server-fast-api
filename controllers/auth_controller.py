@@ -120,6 +120,10 @@ async def verify_otp(request: Request, schema: VerifyOTPSchema, db: AsyncSession
             "boards":        boards,
         })
     except Exception:
+        import traceback
+        import sys
+        traceback.print_exc(file=sys.stderr)
+        sys.stderr.flush()
         return send_error_response(request, 500, "Internal server error")
 
 async def google_sign_up(request: Request, schema: GoogleSignUpSchema, db: AsyncSession):

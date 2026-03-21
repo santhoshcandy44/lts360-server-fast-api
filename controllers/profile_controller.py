@@ -226,6 +226,7 @@ async def update_email_otp_verify(request: Request, schema: UpdateEmailVerifyOTP
 async def send_phone_otp(request: Request, body:SendPhoneOTPSchema, db: AsyncSession):
     try:
         otp = generate_otp()
+        print(otp)
         await save_otp(key=f"phone_{body.phone_number}", otp=otp, email=body.phone_number)
         return send_json_response(200, "OTP sent to phone number")
     except Exception:

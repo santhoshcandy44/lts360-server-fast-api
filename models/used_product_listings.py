@@ -3,14 +3,22 @@ import string
 import random
 
 from decimal import Decimal
-from typing import Optional
+from typing import List, Optional
 
-from sqlmodel import SQLModel, Field
-from sqlalchemy import Column, BigInteger, ForeignKey, Numeric, Enum as SAEnum, event
+from sqlmodel import SQLModel, Field, Relationship
+from sqlalchemy import Column, BigInteger, ForeignKey, Numeric, Enum as SAEnum, Index, event
 from sqlalchemy.orm import Session
 
 class UsedProductListing(SQLModel, table=True):
     __tablename__ = "used_product_listings"
+    __table_args__ = (
+        Index(
+            "ft_local_jobs_name_description",  
+            "name",
+            "description",
+            mysql_prefix="FULLTEXT",            
+        ),
+    )
 
     id:                       Optional[int] = Field(primary_key=True)
     used_product_listing_id:  int           = Field(sa_column=Column(BigInteger, unique=True, nullable=False))
@@ -32,8 +40,26 @@ class UsedProductListing(SQLModel, table=True):
     created_at:               datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at:               datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
 
+    images: List["UsedProductListingImage"] = Relationship(
+        back_populates="used_prodct_listing",
+        sa_relationship_kwargs={"lazy": "selectin"}
+    )
 
- 
+    location: Optional["UsedProductListingLocation"] = Relationship(
+        back_populates="used_prodct_listing",
+        sa_relationship_kwargs={"lazy": "selectin"}
+    )
+
+    owner: Optional["User"] = Relationship(
+        back_populates="used_product_listings",
+        sa_relationship_kwargs={"lazy": "selectin"}
+    )
+
+    bookmarks: List["UserBookmarkUsedProductListing"] = Relationship(
+        back_populates="used_product_listing",
+        sa_relationship_kwargs={"lazy": "selectin"}
+    )
+
 class UsedProductListingImage(SQLModel, table=True):
     __tablename__ = "used_product_listing_images"
  
@@ -46,9 +72,13 @@ class UsedProductListingImage(SQLModel, table=True):
     format:                  str           = Field(max_length=20)
     created_at:              datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at:              datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+    used_prodct_listing: Optional["UsedProductListing"] = Relationship(
+        back_populates="images",        
+        sa_relationship_kwargs={"lazy": "selectin"}
+    )
+
     
-
-
 class UsedProductListingLocation(SQLModel, table=True):
     __tablename__ = "used_product_listing_locations"
  
@@ -66,13 +96,17 @@ class UsedProductListingLocation(SQLModel, table=True):
     created_at:              datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at:              datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
 
- 
+    used_prodct_listing: Optional["UsedProductListing"] = Relationship(
+        back_populates="location",       
+        sa_relationship_kwargs={"lazy": "selectin"}
+    )
+
 class UsedProductListingSearchQuery(SQLModel, table=True):
     __tablename__ = "used_product_listing_search_queries"
  
     id:                       Optional[int] = Field(primary_key=True)
-    search_term:              str           = Field(max_length=255)
-    search_term_concatenated: Optional[str] = Field(default=None, max_length=255)
+    search_term:              str           = Field(max_length=255, unique=True)
+    search_term_concatenated: Optional[str] = Field(max_length=255, unique=True)
     popularity:               int           = Field(default=1)
     last_searched:            datetime      = Field()
     created_at:               datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
@@ -88,7 +122,7 @@ def before_insert_local_job(mapper, connection, target):
  
     while True:
         new_id = random.randint(10_000_000, 99_999_999)
-        exists = session.query(UsedProductListing).filster_by(service_id=new_id).first()
+        exists = session.query(UsedProductListing).filter_by(used_product_listing_id=new_id).first()
         if not exists:
             target.used_product_listing_id = new_id
             break
