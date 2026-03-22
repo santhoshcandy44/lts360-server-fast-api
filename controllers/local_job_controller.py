@@ -699,7 +699,7 @@ async def get_local_job_applications(
 
         applications.append({
             "application_id": application.application_id,
-            "applied_at": str(application.applied_at),
+            "applied_at": str(application.applied_at.replace(tzinfo=timezone.utc).isoformat() if application.applied_at else None,),
             "is_reviewed": bool(application.is_reviewed),
             "contact_info": {
                 "email": u.email,
