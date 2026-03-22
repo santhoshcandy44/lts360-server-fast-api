@@ -15,26 +15,6 @@ VALID_INDIAN_STATES    = [
     "Telangana", "Tripura", "Uttar Pradesh", "Uttarakhand", "West Bengal"
 ]
 
-class GetLocalJobsbSchema(BaseModel):
-    s:          Optional[str] = None
-    page_size:  Optional[int] = None
-    next_token: Optional[str] = None
-
-    @field_validator("s")
-    def validate_s(cls, v):
-        if v is not None:
-            v = v.strip()
-            if len(v) > 100:
-                raise ValueError("Search must be between 0 and 100 characters")
-        return v
-
-    @field_validator("page_size")
-    def validate_page_size(cls, v):
-        if v is not None and v <= 0:
-            raise ValueError("Page size must be a positive integer")
-        return v
-
-
 class GuestGetLocalJobsSchema(BaseModel):
     s:          Optional[str]   = None
     latitude:   Optional[float] = None
@@ -67,6 +47,34 @@ class GuestGetLocalJobsSchema(BaseModel):
         if v is not None and v <= 0:
             raise ValueError("Page size must be a positive integer")
         return v
+
+class GetLocalJobsbSchema(BaseModel):
+    s:          Optional[str] = None
+    page_size:  Optional[int] = None
+    next_token: Optional[str] = None
+
+    @field_validator("s")
+    def validate_s(cls, v):
+        if v is not None:
+            v = v.strip()
+            if len(v) > 100:
+                raise ValueError("Search must be between 0 and 100 characters")
+        return v
+
+    @field_validator("page_size")
+    def validate_page_size(cls, v):
+        if v is not None and v <= 0:
+            raise ValueError("Page size must be a positive integer")
+        return v
+
+class LocalJobIdSchema(BaseModel):
+    local_job_id: int
+
+    @field_validator("local_job_id")
+    def validate_local_job_id(cls, v):
+        if v <= 0:
+            raise ValueError("Invalid local job id")
+        return v    
 
 class CreateOrUpdateLocalJobSchema(BaseModel):
     local_job_id:     int                        = -1
@@ -237,7 +245,7 @@ async def create_or_update_local_job_form(
     except ValidationError as e:
         raise RequestValidationError(e.errors()) 
     
-class GetMeLocalJobsSchema(BaseModel):
+class GetPublishedLocalJobsSchema(BaseModel):
     page_size:  Optional[int] = 20
     next_token: Optional[str] = None
 
@@ -280,15 +288,6 @@ class LocalJobApplicationSchema(BaseModel):
         if v <= 0:
             raise ValueError("Invalid application id")
         return v
-
-class LocalJobIdSchema(BaseModel):
-    local_job_id: int
-
-    @field_validator("local_job_id")
-    def validate_local_job_id(cls, v):
-        if v <= 0:
-            raise ValueError("Invalid local job id")
-        return v    
 
 class SearchSuggestionsSchema(BaseModel):
     query: str

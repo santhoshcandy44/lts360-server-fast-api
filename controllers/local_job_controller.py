@@ -5,10 +5,24 @@ from datetime import datetime, timezone
 from PIL import Image
 
 from fastapi import Request
-from schemas.local_job_schemas import GetLocalJobsbSchema, CreateOrUpdateLocalJobSchema, GetMeLocalJobsSchema, LocalJobIdSchema, GetLocalJobApplicationsSchema, GuestGetLocalJobsSchema, LocalJobApplicationSchema, SearchSuggestionsSchema
+
+from schemas.local_job_schemas import (
+    GuestGetLocalJobsSchema,
+
+    GetLocalJobsbSchema, 
+    LocalJobIdSchema,
+    
+    CreateOrUpdateLocalJobSchema,
+    GetPublishedLocalJobsSchema,
+    GetLocalJobApplicationsSchema,
+    LocalJobApplicationSchema,
+    
+    SearchSuggestionsSchema
+)
+
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
-from sqlalchemy import or_, and_, update, func
+from sqlalchemy import or_, and_, update, func, exists
 from sqlalchemy.dialects.mysql import insert, match
 from sqlalchemy.orm import selectinload
 
@@ -25,46 +39,85 @@ from utils.pagination.cursor import encode_cursor, decode_cursor
 from utils.aws_s3 import upload_to_s3, delete_from_s3, delete_directory_from_s3
 # from kafka.notification_service_producer import send_local_job_applicant_applied_notification_to_kafka
 
-
 def _fmt_url(base, path):
     return f"{base}/{path}" if path else None
 
-def _job_summary_response(
-    job:          LocalJob,
-    images:       list[LocalJobImage],
-    location:     LocalJobLocation,
-    owner:        User,
-    chat:         ChatInfo | None =  None,
+def _user_local_job_summary_response(
+    local_job:          LocalJob,
     is_bookmarked: bool = False,
     is_applied:   bool = False,
     distance:     float | None = None,
 ) -> dict:
     return {
         "user": {
-            "user_id":               owner.user_id,
-            "first_name":            owner.first_name,
-            "last_name":             owner.last_name,
-            "is_verified":           bool(owner.is_email_verified),
-            "profile_pic_url":       _fmt_url(PROFILE_BASE_URL, owner.profile_pic_url),
-            "profile_pic_url_small": _fmt_url(PROFILE_BASE_URL, owner.profile_pic_url_96x96),
-            "online":                bool(chat.online) if chat else False,
-            "joined_at":             str(owner.created_at.year) if owner.created_at else None,
+            "user_id":               local_job.owner.user_id,
+            "first_name":            local_job.owner.first_name,
+            "last_name":             local_job.owner.last_name,
+            "is_verified":           bool(local_job.owner.is_email_verified),
+            "profile_pic_url":       _fmt_url(PROFILE_BASE_URL, local_job.owner.profile_pic_url),
+            "profile_pic_url_small": _fmt_url(PROFILE_BASE_URL, local_job.owner.profile_pic_url_96x96),
+            "online":                bool(local_job.owner.chat_info.online) if local_job.owner.chat_info else False,
+            "joined_at":             str(local_job.owner.created_at.year) if local_job.owner.created_at else None,
         },
         "local_job": {
-            "local_job_id":    job.local_job_id,
-            "title":           job.title,
-            "description":     job.description,
-            "company":         job.company,
-            "age_min":         job.age_min,
-            "age_max":         job.age_max,
-            "marital_statuses": json.loads(job.marital_statuses) if isinstance(job.marital_statuses, str) else job.marital_statuses,
-            "salary_unit":     job.salary_unit,
-            "salary_min":      job.salary_min,
-            "salary_max":      job.salary_max,
-            "country":         job.country,
-            "state":           job.state,
-            "status":          job.status,
-            "slug":            f"{BASE_URL}/local-job/{job.short_code}",
+            "local_job_id":    local_job.local_job_id,
+            "title":           local_job.title,
+            "description":     local_job.description,
+            "salary_unit":     local_job.salary_unit,
+            "salary_min":      local_job.salary_min,
+            "salary_max":      local_job.salary_max,
+            "slug":            f"{BASE_URL}/local-local_job/{local_job.short_code}",
+            "is_bookmarked":   is_bookmarked,
+            "is_applied":      is_applied,
+            "distance":        distance,
+            "images": [
+                {
+                    "image_id":  img.id,
+                    "image_url": _fmt_url(MEDIA_BASE_URL, img.image_url),
+                    "width":     img.width,
+                    "height":    img.height,
+                    "size":      img.size,
+                    "format":    img.format,
+                }
+                for img in sorted(local_job.images, key=lambda x: x.created_at, reverse=True)
+            ],
+            "location": {
+                "geo":           local_job.location.geo,
+            } if local_job.location else None,
+        }
+    }
+
+def _local_job_detail_response(
+    local_job:          LocalJob,
+    is_bookmarked: bool = False,
+    is_applied:   bool = False,
+    distance:     float | None = None,
+) -> dict:
+    return {
+        "user": {
+            "user_id":               local_job.owner.user_id,
+            "first_name":            local_job.owner.first_name,
+            "last_name":             local_job.owner.last_name,
+            "is_verified":           bool(local_job.owner.is_email_verified),
+            "profile_pic_url":       _fmt_url(PROFILE_BASE_URL, local_job.owner.profile_pic_url),
+            "profile_pic_url_small": _fmt_url(PROFILE_BASE_URL, local_job.owner.profile_pic_url_96x96),
+            "online":                bool(local_job.owner.chat_info.online) if local_job.owner.chat_info else False,
+            "joined_at":             str(local_job.owner.created_at.year) if local_job.owner.created_at else None,
+        },
+        "local_job": {
+            "local_job_id":    local_job.local_job_id,
+            "title":           local_job.title,
+            "description":     local_job.description,
+            "company":         local_job.company,
+            "age_min":         local_job.age_min,
+            "age_max":         local_job.age_max,
+            "marital_statuses": json.loads(local_job.marital_statuses) if isinstance(local_job.marital_statuses, str) else local_job.marital_statuses,
+            "salary_unit":     local_job.salary_unit,
+            "salary_min":      local_job.salary_min,
+            "salary_max":      local_job.salary_max,
+            "country":         local_job.country,
+            "state":           local_job.state,
+            "slug":            f"{BASE_URL}/local-local_job/{local_job.short_code}",
             "is_bookmarked":   is_bookmarked,
             "is_applied":      is_applied,
             "distance":        distance,
@@ -80,53 +133,29 @@ def _job_summary_response(
                 for img in sorted(images, key=lambda x: x.created_at, reverse=True)
             ],
             "location": {
-                "longitude":     float(location.longitude),
-                "latitude":      float(location.latitude),
-                "geo":           location.geo,
-                "location_type": location.location_type,
-            } if location else None,
+                "geo":           local_job.location.geo,
+            } if local_job.location else None,
         }
     }
 
-def _job_response(
-    job:          LocalJob,
-    images:       list[LocalJobImage],
-    location:     LocalJobLocation,
-    owner:        User,
-    chat:         ChatInfo | None =  None,
-    is_bookmarked: bool = False,
-    is_applied:   bool = False,
-    distance:     float | None = None,
+def _published_local_job_response(
+    local_job:          LocalJob,
 ) -> dict:
     return {
-        "user": {
-            "user_id":               owner.user_id,
-            "first_name":            owner.first_name,
-            "last_name":             owner.last_name,
-            "is_verified":           bool(owner.is_email_verified),
-            "profile_pic_url":       _fmt_url(PROFILE_BASE_URL, owner.profile_pic_url),
-            "profile_pic_url_small": _fmt_url(PROFILE_BASE_URL, owner.profile_pic_url_96x96),
-            "online":                bool(chat.online) if chat else False,
-            "joined_at":             str(owner.created_at.year) if owner.created_at else None,
-        },
-        "local_job": {
-            "local_job_id":    job.local_job_id,
-            "title":           job.title,
-            "description":     job.description,
-            "company":         job.company,
-            "age_min":         job.age_min,
-            "age_max":         job.age_max,
-            "marital_statuses": json.loads(job.marital_statuses) if isinstance(job.marital_statuses, str) else job.marital_statuses,
-            "salary_unit":     job.salary_unit,
-            "salary_min":      job.salary_min,
-            "salary_max":      job.salary_max,
-            "country":         job.country,
-            "state":           job.state,
-            "status":          job.status,
-            "slug":            f"{BASE_URL}/local-job/{job.short_code}",
-            "is_bookmarked":   is_bookmarked,
-            "is_applied":      is_applied,
-            "distance":        distance,
+            "local_job_id":    local_job.local_job_id,
+            "title":           local_job.title,
+            "description":     local_job.description,
+            "company":         local_job.company,
+            "age_min":         local_job.age_min,
+            "age_max":         local_job.age_max,
+            "marital_statuses": json.loads(local_job.marital_statuses) if isinstance(local_job.marital_statuses, str) else local_job.marital_statuses,
+            "salary_unit":     local_job.salary_unit,
+            "salary_min":      local_job.salary_min,
+            "salary_max":      local_job.salary_max,
+            "country":         local_job.country,
+            "state":           local_job.state,
+            "status":          local_job.status,
+            "slug":            f"{BASE_URL}/local-local_job/{local_job.short_code}",
             "images": [
                 {
                     "image_id":  img.id,
@@ -136,57 +165,17 @@ def _job_response(
                     "size":      img.size,
                     "format":    img.format,
                 }
-                for img in sorted(images, key=lambda x: x.created_at, reverse=True)
+                for img in sorted(local_job.images, key=lambda x: x.created_at, reverse=True)
             ],
             "location": {
-                "longitude":     float(location.longitude),
-                "latitude":      float(location.latitude),
-                "geo":           location.geo,
-                "location_type": location.location_type,
-            } if location else None,
-        }
+                "longitude":     float(local_job.location.longitude),
+                "latitude":      float(local_job.location.latitude),
+                "geo":           local_job.location.geo,
+                "location_type": local_job.location.location_type,
+            } if local_job.location else None,
     }
 
-def _published_job_response(
-    job:          LocalJob,
-    images:       list[LocalJobImage],
-    location:     LocalJobLocation,
-) -> dict:
-    return {
-            "local_job_id":    job.local_job_id,
-            "title":           job.title,
-            "description":     job.description,
-            "company":         job.company,
-            "age_min":         job.age_min,
-            "age_max":         job.age_max,
-            "marital_statuses": json.loads(job.marital_statuses) if isinstance(job.marital_statuses, str) else job.marital_statuses,
-            "salary_unit":     job.salary_unit,
-            "salary_min":      job.salary_min,
-            "salary_max":      job.salary_max,
-            "country":         job.country,
-            "state":           job.state,
-            "status":          job.status,
-            "slug":            f"{BASE_URL}/local-job/{job.short_code}",
-            "images": [
-                {
-                    "image_id":  img.id,
-                    "image_url": _fmt_url(MEDIA_BASE_URL, img.image_url),
-                    "width":     img.width,
-                    "height":    img.height,
-                    "size":      img.size,
-                    "format":    img.format,
-                }
-                for img in sorted(images, key=lambda x: x.created_at, reverse=True)
-            ],
-            "location": {
-                "longitude":     float(location.longitude),
-                "latitude":      float(location.latitude),
-                "geo":           location.geo,
-                "location_type": location.location_type,
-            } if location else None,
-    }
-
-def _paginate_jobs(items: list, last_local_job:LocalJob | None, lastDistance: int | None, lastTotalRelavance: int | None,  page_size: int,  next_token: str = None ) -> dict:
+def _paginate_local_jobs(items: list, last_local_job:LocalJob | None, lastDistance: int | None, lastTotalRelavance: int | None,  page_size: int,  next_token: str = None ) -> dict:
     has_next       = len(items) == page_size and last_local_job is not None
     next_token_out = encode_cursor({
         "created_at":      str(last_local_job.created_at),
@@ -200,7 +189,7 @@ def _paginate_jobs(items: list, last_local_job:LocalJob | None, lastDistance: in
         "previous_token": next_token if next_token else None,
     }
 
-def _paginate_me_jobs(items: list, last_local_job:LocalJob | None, page_size: int, next_token: str = None ) -> dict:
+def _paginate_published_jobs(items: list, last_local_job:LocalJob | None, page_size: int, next_token: str = None ) -> dict:
     has_next       = len(items) == page_size and last_local_job is not None
     next_token_out = encode_cursor({
         "created_at":      str(last_local_job.created_at),
@@ -230,7 +219,7 @@ def _relevance(query: str):
         against=query
     ).label("total_relevance")
 
-async def _query_jobs(
+async def _query_local_jobs(
     db:        AsyncSession,
     page_size: int,
     user_id:   int | None = None,
@@ -259,20 +248,18 @@ async def _query_jobs(
     cols = [LocalJob]
 
     bookmark_subq = (
-        select(UserBookmarkLocalJob.local_job_id)
-        .where(UserBookmarkLocalJob.user_id == user_id)
-        .correlate(LocalJob)
-        .scalar_subquery()
-    ).label("is_bookmarked")
+    exists()
+    .where(
+        UserBookmarkLocalJob.local_job_id == LocalJob.local_job_id,
+        UserBookmarkLocalJob.user_id == user_id
+    )).label("is_bookmarked")
 
     applicant_subq = (
-        select(LocalJobApplicant.local_job_id)
-        .where(
-            LocalJobApplicant.local_job_id == LocalJob.local_job_id,
-            LocalJobApplicant.candidate_id == user_id,
+    exists()
+    .where(
+        LocalJobApplicant.local_job_id == LocalJob.local_job_id,
+        LocalJobApplicant.candidate_id == user_id
         )
-        .correlate(LocalJob)
-        .scalar_subquery()
     ).label("is_applied")
 
     if has_loc:
@@ -366,21 +353,17 @@ async def _query_jobs(
 
     last_row = rows[-1] if rows else None
 
-    jobs = [
-    _job_summary_response(
+    localJobs = [
+    _user_local_job_summary_response(
         row.LocalJob,
-        row.LocalJob.images,
-        row.LocalJob.location,
-        row.LocalJob.owner,         
-        row.LocalJob.owner.chat_info, 
         bool(row.is_bookmarked) if user_id else False,
         bool(row.is_applied)    if user_id else False,
         float(row.distance)     if has_loc else None
     )
     for row in rows]
     
-    return _paginate_jobs(
-        jobs,
+    return _paginate_local_jobs(
+        localJobs,
         getattr(last_row, "LocalJob", None),
         getattr(last_row, "distance", None) if has_loc else None,
         getattr(last_row, "total_relevance", None) if query else None,
@@ -397,7 +380,7 @@ async def guest_get_local_jobs(request: Request, schema: GuestGetLocalJobsSchema
         lat = schema.latitude
         lon = schema.longitude
 
-        data = await _query_jobs(db=db, page_size=page_size, query=s, user_lat=lat, user_long=lon, next_token=next_token)
+        data = await _query_local_jobs(db=db, page_size=page_size, query=s, user_lat=lat, user_long=lon, next_token=next_token)
 
         return send_json_response(200, "Local jobs fetched", data= data)
     except Exception:
@@ -405,48 +388,28 @@ async def guest_get_local_jobs(request: Request, schema: GuestGetLocalJobsSchema
 
 async def get_local_jobs(request: Request, schema: GetLocalJobsbSchema, db: AsyncSession):
     try:
+        user_id = request.state.user.user_id    
+
         s = schema.s
         page_size = 1
         next_token = schema.next_token
 
-        user_id = request.state.user.user_id    
-
         loc = await db.scalar(select(UserLocation).where(UserLocation.user_id == user_id))
         lat, lon = (float(loc.latitude), float(loc.longitude)) if loc else (None, None)
 
-        data = await _query_jobs(db=db, user_id=user_id, page_size=page_size, query=s, user_lat=lat, user_lon=lon, next_token=next_token)
+        data = await _query_local_jobs(db=db, user_id=user_id, page_size=page_size, query=s, user_lat=lat, user_lon=lon, next_token=next_token)
         return send_json_response(200, "Local jobs fetched", data= data)
     except Exception:
-        return send_error_response(request, 500, "Internal server error")
-
-async def guest_get_local_job(request: Request, schema: LocalJobIdSchema, db: AsyncSession):
-    try:
-        job = await db.scalar(
-            select(LocalJob)
-            .options(
-                selectinload(LocalJob.location),
-                selectinload(LocalJob.images),
-                selectinload(LocalJob.owner)
-            )
-            .where(LocalJob.local_job_id == schema.local_job_id)
-        )
-
-        if not job:
-            return send_error_response(request, 404, "Local job not exist")
-
-        return send_json_response(200, "Local job retrived", data=_job_response(
-            job,
-            images=job.images,
-            location=job.location,
-            owner=job.owner
-        ))
-    except Exception:
+        import traceback
+        import sys
+        traceback.print_exc(file=sys.stderr)
+        sys.stderr.flush()
         return send_error_response(request, 500, "Internal server error")
 
 async def get_local_job(request: Request, schema: LocalJobIdSchema, db: AsyncSession):
     try:
         user_id = request.state.user.user_id
-        job = await db.scalar(
+        local_job = await db.scalar(
             select(LocalJob)
             .options(
                 selectinload(LocalJob.images),
@@ -456,8 +419,8 @@ async def get_local_job(request: Request, schema: LocalJobIdSchema, db: AsyncSes
             .where(LocalJob.local_job_id == schema.local_job_id)
         )
 
-        if not job:
-            return send_error_response(request, 404, "Local job not exist")
+        if not local_job:
+            return send_error_response(request, 404, "Local local_job not exist")
         
         is_applied = await db.scalar(
             select(LocalJobApplicant)
@@ -465,12 +428,8 @@ async def get_local_job(request: Request, schema: LocalJobIdSchema, db: AsyncSes
             .where(LocalJobApplicant.candidate_id == str(user_id))
             ) is not None
 
-        return send_json_response(200, "Local job retrived", data=_job_response(
-            job=job,
-            images=job.images,
-            location=job.location,
-            owner = job.owner,
-            chat=job.owner.chat_info,
+        return send_json_response(200, "Local local_job retrived", data=_local_job_detail_response(
+            local_job=local_job,
             is_applied=bool(is_applied),
         ))
     except Exception:
@@ -483,11 +442,11 @@ async def get_local_job(request: Request, schema: LocalJobIdSchema, db: AsyncSes
 async def apply_local_job(request: Request, schema: LocalJobIdSchema, db: AsyncSession):
     try:
         user_id = request.state.user.user_id
-        job = await db.scalar(
+        local_job = await db.scalar(
             select(LocalJob).where(LocalJob.local_job_id == schema.local_job_id)
         )
-        if not job:
-            return send_error_response(request, 404, "Local job not exist")
+        if not local_job:
+            return send_error_response(request, 404, "Local local_job not exist")
         applicant = LocalJobApplicant(
             candidate_id=user_id,
             local_job_id=schema.local_job_id
@@ -495,11 +454,11 @@ async def apply_local_job(request: Request, schema: LocalJobIdSchema, db: AsyncS
         db.add(applicant)
         await db.flush() 
         
-        # kafka_key = f"{schema.local_job_id}:{schema.job.created_by}:{user_id}"
+        # kafka_key = f"{schema.local_job_id}:{schema.local_job.created_by}:{user_id}"
         # send_local_job_applicant_applied_notification_to_kafka(kafka_key, {
-        #     "user_id":         job.created_by,
+        #     "user_id":         local_job.created_by,
         #     "candidate_id":    user_id,
-        #     "local_job_title": job.title,
+        #     "local_job_title": local_job.title,
         #     "application_id":  applicant.application_id,
         # })
         return send_json_response(200, "Applied successfully")
@@ -543,7 +502,7 @@ async def create_or_update_local_job(
             existing.state            = schema.state
             existing.marital_statuses =  json.dumps(schema.marital_statuses)
             db.add(existing)
-            job    = existing
+            local_job    = existing
         else:
           new_job = LocalJob(
             title            = schema.title,
@@ -561,7 +520,7 @@ async def create_or_update_local_job(
             )
           db.add(new_job)
           await db.flush()
-          job = await db.scalar(
+          local_job = await db.scalar(
             select(LocalJob)
             .options(selectinload(LocalJob.images))   
             .options(selectinload(LocalJob.location))  
@@ -570,7 +529,7 @@ async def create_or_update_local_job(
                 LocalJob.created_by   == user_id,
             ))
           
-        old_images = job.images
+        old_images = local_job.images
         keep_ids   = set(schema.keep_image_ids or [])
         for img in old_images:
             if img.id not in keep_ids:
@@ -579,7 +538,7 @@ async def create_or_update_local_job(
 
         for image in images:
             contents = await image.read()
-            key      = f"media/{media_id}/local-jobs/{job.local_job_id}/{uuid.uuid4()}-{image.filename}"
+            key      = f"media/{media_id}/local-localJobs/{local_job.local_job_id}/{uuid.uuid4()}-{image.filename}"
             await upload_to_s3(contents, key, image.content_type)
             uploaded_keys.append(key)
 
@@ -587,7 +546,7 @@ async def create_or_update_local_job(
             width, height = img.size
  
             db.add(LocalJobImage(
-                local_job_id = job.local_job_id,
+                local_job_id = local_job.local_job_id,
                 image_url    = key,
                 width        = width,
                 height       = height,
@@ -598,7 +557,7 @@ async def create_or_update_local_job(
         await db.flush() 
 
         location = schema.location
-        loc      = job.location
+        loc      = local_job.location
 
         if loc:
             loc.latitude      = location["latitude"]
@@ -608,7 +567,7 @@ async def create_or_update_local_job(
             db.add(loc)
         else:
             db.add(LocalJobLocation(
-                local_job_id = job.local_job_id,
+                local_job_id = local_job.local_job_id,
                 latitude      = location["latitude"],
                 longitude     = location["longitude"],
                 geo           = location["geo"],
@@ -620,16 +579,16 @@ async def create_or_update_local_job(
         for key in deleted_keys:
             await delete_from_s3(key)
 
-        await db.refresh(job, attribute_names=["images", "location", "owner"])    
-        return send_json_response(200, "Local job saved", data=_published_job_response(job, job.images, job.location))
+        await db.refresh(local_job, attribute_names=["images", "location", "owner"])    
+        return send_json_response(200, "Local local_job saved", data=_published_local_job_response(local_job))
     except Exception:
         for key in uploaded_keys:
             await delete_from_s3(key)
         return send_error_response(request, 500, "Internal server error")
 
-async def get_me_local_jobs(
+async def get_published_local_jobs(
     request: Request,
-    schema: GetMeLocalJobsSchema,
+    schema: GetPublishedLocalJobsSchema,
     db: AsyncSession,
 ):
     user_id = request.state.user.user_id
@@ -655,15 +614,15 @@ async def get_me_local_jobs(
 
     q = q.order_by(LocalJob.created_at.desc(), LocalJob.id.asc()).limit(page_size)
 
-    jobs = (await db.execute(q)).scalars().all()
+    localJobs = (await db.execute(q)).scalars().all()
 
-    items = [_published_job_response(job, job.images, job.location) for job in jobs]
-    last_row = jobs[-1] if jobs else None
+    items = [_published_local_job_response(local_job, local_job.images, local_job.location) for local_job in localJobs]
+    last_row = localJobs[-1] if localJobs else None
 
     return send_json_response(
         200,
         "Local jobs retrieved",
-        data=_paginate_me_jobs(items, getattr(last_row, "LocalJob", None), page_size, next_token if payload else None)
+        data=_paginate_published_jobs(items, getattr(last_row, "LocalJob", None), page_size, next_token if payload else None)
         )
 
 async def delete_local_job(request: Request, schema: LocalJobIdSchema, db: AsyncSession):
@@ -671,20 +630,20 @@ async def delete_local_job(request: Request, schema: LocalJobIdSchema, db: Async
         user_id = request.state.user.user_id,
         local_job_id = schema.local_job_id,
 
-        job = await db.scalar(
+        local_job = await db.scalar(
             select(LocalJob).where(LocalJob.local_job_id == local_job_id, LocalJob.created_by == user_id)
         )
-        if not job:
-            return send_error_response(request, 404, "Local job not exist")
+        if not local_job:
+            return send_error_response(request, 404, "Local local_job not exist")
 
         media_id = await db.scalar(select(User.media_id).where(User.user_id == user_id))
 
-        await db.delete(job)
+        await db.delete(local_job)
 
         if media_id:
-            await delete_directory_from_s3(f"media/{media_id}/local-jobs/{local_job_id}")
+            await delete_directory_from_s3(f"media/{media_id}/local-localJobs/{local_job_id}")
 
-        return send_json_response(200, "Local job deleted")
+        return send_json_response(200, "Local local_job deleted")
     except Exception:
         return send_error_response(request, 500, "Internal server error")
 
@@ -699,9 +658,9 @@ async def get_local_job_applications(
 
     payload   = decode_cursor(next_token) if next_token else None
 
-    job = await db.scalar(select(LocalJob).where(LocalJob.local_job_id == local_job_id))
-    if not job:
-        return send_error_response(request, 404, "Local job not exist")
+    local_job = await db.scalar(select(LocalJob).where(LocalJob.local_job_id == local_job_id))
+    if not local_job:
+        return send_error_response(request, 404, "Local local_job not exist")
 
     q = (
         select(LocalJobApplicant)
@@ -775,11 +734,11 @@ async def get_local_job_applications(
 async def mark_as_reviewed(request: Request, schema: LocalJobApplicationSchema, db: AsyncSession):
     try:
         user_id = request.state.user.user_id
-        job = await db.scalar(
+        local_job = await db.scalar(
             select(LocalJob).where(LocalJob.local_job_id == schema.local_job_id, LocalJob.created_by == user_id)
         )
-        if not job:
-            return send_error_response(request, 404, "Local job not exist")
+        if not local_job:
+            return send_error_response(request, 404, "Local local_job not exist")
 
         await db.execute(
             update(LocalJobApplicant)
@@ -794,11 +753,11 @@ async def unmark_as_reviewed(request: Request, schema: LocalJobApplicationSchema
     try:
         user_id = request.state.user.user_id
         
-        job = await db.scalar(
+        local_job = await db.scalar(
             select(LocalJob).where(LocalJob.local_job_id == schema.local_job_id, LocalJob.created_by == user_id)
         )
-        if not job:
-            return send_error_response(request, 404, "Local job not exist")
+        if not local_job:
+            return send_error_response(request, 404, "Local local_job not exist")
 
         await db.execute(
             update(LocalJobApplicant)

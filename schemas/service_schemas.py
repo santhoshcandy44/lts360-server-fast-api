@@ -336,7 +336,8 @@ async def create_service_form(
     images:            List[UploadFile]     = Form(...),
     thumbnail:         UploadFile           = Form(...)
 ) -> CreateServiceSchema:
-    return CreateServiceSchema(
+    try:
+        return CreateServiceSchema(
         title             = title,
         short_description = short_description,
         long_description  = long_description,
@@ -348,6 +349,8 @@ async def create_service_form(
         images            = images,
         thumbnail         = thumbnail
     )
+    except ValidationError as e:
+        raise RequestValidationError(e.errors())     
 
 class GetPublishedServicesSchema(BaseModel):
     page_size:      Optional[int] = None

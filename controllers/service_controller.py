@@ -30,7 +30,7 @@ from schemas.service_schemas import (
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
-from sqlalchemy import func, or_, and_, delete
+from sqlalchemy import func, or_, and_, delete, exists
 from sqlalchemy.dialects.mysql import insert, match
 from sqlalchemy.orm import selectinload
 
@@ -112,25 +112,19 @@ def _user_service_summary_response(
 
 def _user_service_detail_response(
     service:  Service,
-    thumbnail: ServiceThumbnail,
-    images:   list[ServiceImage],
-    plans: list[ServicePlan],
-    location: ServiceLocation,
-    owner:        User,
-    chat:         ChatInfo | None =  None,
     is_bookmarked: bool = False,
     distance:     float | None = None,
 ) -> dict:
     return {
          "user": {
-            "user_id":               owner.user_id,
-            "first_name":            owner.first_name,
-            "last_name":             owner.last_name,
-            "is_verified":           bool(owner.is_email_verified),
-            "profile_pic_url":       _fmt_url(PROFILE_BASE_URL, owner.profile_pic_url),
-            "profile_pic_url_small": _fmt_url(PROFILE_BASE_URL, owner.profile_pic_url_96x96),
-            "online":                bool(chat.online) if chat else False,
-            "joined_at":             str(owner.created_at.year) if owner.created_at else None,
+            "user_id":               service.owner.user_id,
+            "first_name":            service.owner.first_name,
+            "last_name":             service.owner.last_name,
+            "is_verified":           bool(service.owner.is_email_verified),
+            "profile_pic_url":       _fmt_url(PROFILE_BASE_URL, service.owner.profile_pic_url),
+            "profile_pic_url_small": _fmt_url(PROFILE_BASE_URL, service.owner.profile_pic_url_96x96),
+            "online":                bool(service.owner.chat_info.online) if service.owner.chat_info else False,
+            "joined_at":             str(service.owner.created_at.year) if service.owner.created_at else None,
         },
           "service": {
             "service_id":        service.service_id,
@@ -164,54 +158,28 @@ def _user_service_detail_response(
 
 def _service_summary_response(
     service:  Service,
-    thumbnail: ServiceThumbnail,
-    images:   list[ServiceImage],
-    plans: list[ServicePlan],
-    location: ServiceLocation,
-    owner:        User,
-    chat:         ChatInfo | None =  None,
-    is_bookmarked: bool = False,
-    distance:     float | None = None,
+    is_bookmarked: bool = False
 ) -> dict:
     return {
             "service_id":        service.service_id,
             "title":             service.title,
             "short_description": service.short_description,
-            "long_description":  service.long_description,
             "industry":          service.industry,
-            "country":           service.country,
-            "state":             service.state,
-            "status":            service.status,
             "slug":              f"{BASE_URL}/service/{service.short_code}",
             "is_bookmarked":     is_bookmarked,
-            "distance":          distance,
-            "thumbnail":         _parse_thumbnail(thumbnail),
-            "images": [
-                {
-                    "image_id":  img.id,
-                    "image_url": _fmt_url(MEDIA_BASE_URL, img.image_url),
-                    "width":     img.width,
-                    "height":    img.height,
-                    "size":      img.size,
-                    "format":    img.format,
-                }
-                for img in sorted(images, key=lambda x: x.created_at, reverse=True)
-            ],
-            "plans":    _parse_plans(plans),
-            "location": {
-                "longitude":     float(location.longitude),
-                "latitude":      float(location.latitude),
-                "geo":           location.geo,
-                "location_type": location.location_type,
-            } if location else None
+            "thumbnail":         _parse_thumbnail(service.thumbnail),
+            "plans":    _parse_plans(service.plans),
+                 "location": {
+                "geo":           service.location.geo,
+            } if service.location else None,
+            "starting_from": {
+                    "price":      float(min(service.plans, key=lambda p: p.price).price),
+                    "price_unit": min(service.plans, key=lambda p: p.price).price_unit,
+                } if service.plans else None
     }
 
 def _published_service_response(
-    service:      Service,
-    thumbnail:    ServiceThumbnail,
-    images:       list[ServiceImage],
-    plans:        list[ServicePlan],
-    location:     ServiceLocation
+    service:      Service
 ) -> dict:
     return {
             "service_id":        service.service_id,
@@ -223,7 +191,7 @@ def _published_service_response(
             "state":             service.state,
             "status":            service.status,
             "slug":              f"{BASE_URL}/service/{service.short_code}",
-            "thumbnail":         _parse_thumbnail(thumbnail),
+            "thumbnail":         _parse_thumbnail(service.thumbnail),
             "images": [
                 {
                     "image_id":  img.id,
@@ -233,15 +201,15 @@ def _published_service_response(
                     "size":      img.size,
                     "format":    img.format,
                 }
-                for img in sorted(images, key=lambda x: x.created_at, reverse=True)
+                for img in sorted(service.images, key=lambda x: x.created_at, reverse=True)
             ],
-            "plans":    _parse_plans(plans),
+            "plans":    _parse_plans(service.plans),
             "location": {
-                "longitude":     float(location.longitude),
-                "latitude":      float(location.latitude),
-                "geo":           location.geo,
-                "location_type": location.location_type,
-            } if location else None,
+                "longitude":     float(service.location.longitude),
+                "latitude":      float(service.location.latitude),
+                "geo":           service.location.geo,
+                "location_type": service.location.location_type,
+            } if service.location else None,
     }
 
 def _paginate_services(items: list, service:Service | None, lastDistance: int | None, lastTotalRelavance: int | None,  page_size: int,  next_token: str = None ) -> dict:
@@ -330,10 +298,11 @@ async def _query_services(
     cols = [Service]
 
     bookmark_subq = (
-        select(UserBookmarkService.service_id)
-        .where(UserBookmarkService.user_id == user_id)
-        .correlate(UserBookmarkService)
-        .scalar_subquery()
+        exists()
+        .where(
+            UserBookmarkService.service_id == Service.service_id,
+            UserBookmarkService.user_id == user_id
+        )
     ).label("is_bookmarked")
 
     if has_loc:
@@ -348,7 +317,8 @@ async def _query_services(
     q = (
         select(*cols)
         .options(
-            selectinload(Service.images),    
+            selectinload(Service.thumbnail),    
+            selectinload(Service.plans),     
             selectinload(Service.location),
             selectinload(Service.owner).selectinload(User.chat_info)
         )
@@ -448,7 +418,7 @@ async def _query_services(
 async def guest_get_services(request: Request, schema: GuestGetServicesSchema, db: AsyncSession):
     try:
         s = schema.s
-        page_size = 1
+        page_size = schema.page_size
         next_token = schema.next_token
         
         lat = schema.latitude
@@ -462,7 +432,7 @@ async def guest_get_services(request: Request, schema: GuestGetServicesSchema, d
 async def get_services(request: Request, schema: GetServicesSchema, db: AsyncSession):
     try:
         s = schema.s
-        page_size = 1
+        page_size = schema.page_size
         next_token = schema.next_token
         
         user_id = request.state.user.user_id    
@@ -500,10 +470,6 @@ async def get_service_by_service_id(request: Request, schema: ServiceIdSchema, d
             )    
         return send_json_response(200, "Used service listing job retrived", data = data)
     except Exception:
-        import traceback
-        import sys
-        traceback.print_exc(file=sys.stderr)
-        sys.stderr.flush()
         return send_error_response(request, 500, "Internal server error")
 
 async def get_user_profile_and_services_by_user_id(
@@ -513,26 +479,35 @@ async def get_user_profile_and_services_by_user_id(
 ): 
     try:
         user_id = request.state.user.user_id
-        page_size = 1
+        page_size = schema.page_size
+        
+        bookmark_subq = (
+            exists()
+            .where(
+                UserBookmarkService.service_id == Service.service_id,
+                UserBookmarkService.user_id == user_id
+            )
+        ).label("is_bookmarked")
         
         q = (
-            select(Service)
+            select(Service, bookmark_subq)
             .where(Service.created_by == user_id)
             .options(
-                selectinload(Service.images),      
-                selectinload(Service.location),   
-                selectinload(Service.owner)      
+                selectinload(Service.thumbnail),
+                selectinload(Service.plans),
+                selectinload(Service.location),
+                selectinload(Service.owner)
             )
         )
 
         q = q.order_by(Service.created_at.desc(), Service.id.asc()).limit(page_size)
 
-        services = (await db.execute(q)).scalars().all()
+        services = (await db.execute(q)).all()
 
-        owner = services[0].owner if services else None
+        owner = services[0].Service.owner if services else None
         chat  = owner.chat_info if owner else None
 
-        items = [_service_summary_response(service, service.thumbnail, service.images, service.plans, service.location, service.owner) for service in services]
+        items = [_service_summary_response(service, bool(is_bookmarked) if user_id else False) for service,  is_bookmarked in services]
 
         data = {
             "user": {
@@ -551,7 +526,7 @@ async def get_user_profile_and_services_by_user_id(
         return send_json_response(
             200,
             "User profile and Used service listings retrieved",
-            data=_paginate_profile_and_services(data, last_row, page_size))
+            data=_paginate_profile_and_services(data, last_row.Service, page_size))
     except Exception:
             return send_error_response(request, 500, "Internal server error")
 
@@ -561,15 +536,25 @@ async def get_services_by_user_id(
     db: AsyncSession,
 ): 
     try:
+        user_id =  request.state.user.user_id
         next_token = schema.next_token
-        page_size = 1
+        page_size = schema.page_size
         payload = decode_cursor(next_token) if next_token else None
 
+        bookmark_subq = (
+            exists()
+            .where(
+                UserBookmarkService.service_id == Service.service_id,
+                UserBookmarkService.user_id == user_id
+            )
+        ).label("is_bookmarked")
+
         q = (
-                select(Service)
+                select(Service, bookmark_subq)
                 .where(Service.created_by == schema.user_id)
                 .options(
-                    selectinload(Service.images),      
+                    selectinload(Service.thumbnail),      
+                    selectinload(Service.plans),
                     selectinload(Service.location),   
                     selectinload(Service.owner)      
                 )
@@ -583,20 +568,12 @@ async def get_services_by_user_id(
 
         q = q.order_by(Service.created_at.desc(), Service.id.asc()).limit(page_size)
 
-        services = (await db.execute(q)).scalars().all()
+        services = (await db.execute(q)).all()
 
-        items = [_published_service_response(service, service.thumbnail, service.images, service.plans, service.location) for service in services]
+        items = [_user_service_summary_response(service,  bool(is_bookmarked)) for service, is_bookmarked in services]
         last_row = services[-1] if services else None
-        return send_json_response(
-                200,
-                "Services listings retrieved",
-                data=_paginate_services_by_service(items, last_row, page_size, next_token if payload else None)
-                )
+        return send_json_response(200,"Services listings retrieved", data=_paginate_services_by_service(items, last_row.Service, page_size, next_token if payload else None))
     except Exception:
-            import traceback
-            import sys
-            traceback.print_exc(file=sys.stderr)
-            sys.stderr.flush()
             return send_error_response(request, 500, "Internal server error")
 
 async def create_service(
@@ -708,7 +685,7 @@ async def get_published_services(
     try:
         user_id = request.state.user.user_id
         next_token = schema.next_token
-        page_size = 1
+        page_size = schema.page_size
         payload = decode_cursor(next_token) if next_token else None
 
         q = (
