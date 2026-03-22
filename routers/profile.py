@@ -124,11 +124,3 @@ async def update_location(
     db:      AsyncSession = Depends(get_db),
 ):
     return await profile_controller.update_location(request, body, db)
-
-
-@router.post("/logout")
-async def log_out(
-    request: Request,
-    db:      AsyncSession = Depends(get_db),
-):
-    return await profile_controller.log_out(request, db)

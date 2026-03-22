@@ -19,11 +19,12 @@ from utils.otp_store import save_otp, get_otp, delete_otp, is_expired
 from fastapi import Request
 from sqlmodel import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from models.user import User
 from .board_controller import create_default_boards_for_user, get_boards, get_boards_by_user_id
 
-def _build_user_response(result, profile_base_url: str) -> dict:
+def _build_user_response(result) -> dict:
     return {
         "user_id":            result.user_id,
         "first_name":         result.first_name,
@@ -34,12 +35,18 @@ def _build_user_response(result, profile_base_url: str) -> dict:
         "phone_country_code": result.phone_country_code,
         "phone_number":       result.phone_number,
         "is_phone_verified":  bool(result.is_phone_verified),
-        "profile_pic_url":    f"{profile_base_url}/{result.profile_pic_url}" if result.profile_pic_url else None,
+        "profile_pic_url":    f"{PROFILE_BASE_URL}/{result.profile_pic_url}" if result.profile_pic_url else None,
         "account_type":       result.account_type,
         "created_at":         str(result.created_at.year) if result.created_at else None,
         "updated_at":         str(result.updated_at),
+            "location": {
+            "latitude":      float(result.location.latitude),
+            "longitude":     float(result.location.longitude),
+            "geo":           result.location.geo,
+            "location_type": result.location.location_type,
+            "updated_at":    str(result.location.updated_at),
+        } if result.location else None,
     }
-
 
 async def _update_last_sign_in(user: User, db: AsyncSession) -> User:
     user.last_sign_in   = datetime.now(timezone.utc)
@@ -83,9 +90,12 @@ async def verify_otp(request: Request, schema: VerifyOTPSchema, db: AsyncSession
             return send_error_response(request, 400, "OTP expired")
         if entry["otp"] != otp:
             return send_error_response(request, 400, "Invalid OTP")
+        
+        existing_user = await db.scalar(select(User)
+                    .options(selectinload(User.location))
+                    .where(User.email == email))
 
-        result = await db.execute(select(User).where(User.email == email))
-        if result.scalar_one_or_none():
+        if existing_user:
             return send_error_response(request, 409, "Email in use with another account")
 
         salt      = await generate_salt()
@@ -116,7 +126,7 @@ async def verify_otp(request: Request, schema: VerifyOTPSchema, db: AsyncSession
         return send_json_response(201, "User registered successfully", data={
             "access_token":  tokens["accessToken"],
             "refresh_token": tokens["refreshToken"],
-            "user":          _build_user_response(new_user, PROFILE_BASE_URL),
+            "user":          _build_user_response(new_user),
             "boards":        boards,
         })
     except Exception:
@@ -134,8 +144,11 @@ async def google_sign_up(request: Request, schema: GoogleSignUpSchema, db: Async
         payload       = await verify_id_token(id_token)
         payload_email = payload.get("email")
 
-        result = await db.execute(select(User).where(User.email == payload_email))
-        if result.scalar_one_or_none():
+        existing_user = await db.scalar(select(User)
+                    .options(selectinload(User.location))
+                    .where(User.email == payload_email))
+
+        if existing_user:
             return send_error_response(request, 409, "Email is in use with another account")
 
         new_user = User(
@@ -159,7 +172,7 @@ async def google_sign_up(request: Request, schema: GoogleSignUpSchema, db: Async
         return send_json_response(201, "User registered successfully", data={
             "access_token":  tokens["accessToken"],
             "refresh_token": tokens["refreshToken"],
-            "user":          _build_user_response(new_user, PROFILE_BASE_URL),
+            "user":          _build_user_response(new_user),
             "boards":        boards,
         })
     except Exception:
@@ -169,8 +182,9 @@ async def email_sign_in(request: Request, schema: EmailSignInSchema, db: AsyncSe
     try:
         email = schema.email
         password = schema.password
-        result = await db.execute(select(User).where(User.email == email))
-        existing_user = result.scalar_one_or_none()
+        existing_user = await db.scalar(select(User)
+                            .options(selectinload(User.location))
+                            .where(User.email == email))
         if not existing_user:
             return send_error_response(request, 404, "Invalid user account")
 
@@ -181,10 +195,10 @@ async def email_sign_in(request: Request, schema: EmailSignInSchema, db: AsyncSe
         tokens = generate_tokens(existing_user.user_id, existing_user.email, "legacy_email", existing_user.last_sign_in)
         boards = await get_boards_by_user_id(request, existing_user.user_id, db)
 
-        return send_json_response(200, "User login successfully", data={
+        return send_json_response(200, "User sign in successfully", data={
             "access_token":  tokens["accessToken"],
             "refresh_token": tokens["refreshToken"],
-            "user":          _build_user_response(existing_user, PROFILE_BASE_URL),
+            "user":          _build_user_response(existing_user),
             "boards":        boards,
         })
     except Exception:
@@ -199,10 +213,12 @@ async def google_sign_in(request: Request, schema: GoogleSignInSchema, db: Async
         if not payload_email:
             return send_error_response(request, 503, "Something went wrong")
 
-        result = await db.execute(select(User).where(User.email == payload_email))
-        existing_user = result.scalar_one_or_none()
+        existing_user = await db.scalar(select(User)
+                            .options(selectinload(User.location))
+                            .where(User.email == payload_email))
+        
         if not existing_user:
-            return send_error_response(request, 404, "No account found")
+            return send_error_response(request, 404, "No account exist")
         if existing_user.sign_up_method != "google":
             return send_error_response(request, 400, "This email is signed up with a different method")
 
@@ -213,7 +229,7 @@ async def google_sign_in(request: Request, schema: GoogleSignInSchema, db: Async
         return send_json_response(200, "User sign in successfully", data={
             "access_token":  tokens["accessToken"],
             "refresh_token": tokens["refreshToken"],
-            "user":          _build_user_response(existing_user, PROFILE_BASE_URL),
+            "user":          _build_user_response(existing_user),
             "boards":        boards,
         })
     except Exception:
@@ -224,8 +240,9 @@ async def partner_email_sign_in(request: Request, schema: LTS360SignInSchema, db
         email = schema.email
         password = schema.password
 
-        result = await db.execute(select(User).where(User.email == email))
-        existing_user = result.scalar_one_or_none()
+        existing_user = await db.scalar(select(User)
+                            .options(selectinload(User.location))
+                            .where(User.email == email))
         if not existing_user:
             return send_error_response(request, 404, "Invalid user account")
 
@@ -233,7 +250,7 @@ async def partner_email_sign_in(request: Request, schema: LTS360SignInSchema, db
             return send_error_response(request, 400, "Invalid password")
 
         return send_json_response(200, "User login successfully", data={
-            "user": _build_user_response(existing_user, PROFILE_BASE_URL),
+            "user": _build_user_response(existing_user),
         })
     except Exception:
         return send_error_response(request, 500, "Internal Server Error")
@@ -247,8 +264,10 @@ async def partner_google_sign_in(request: Request, schema: GoogleLTS360SignInSch
         if not payload_email:
             return send_error_response(request, 503, "Something went wrong")
 
-        result = await db.execute(select(User).where(User.email == payload_email))
-        existing_user = result.scalar_one_or_none()
+        existing_user = await db.scalar(select(User)
+                            .options(selectinload(User.location))
+                            .where(User.email == payload_email))
+                            
         if not existing_user:
             return send_error_response(request, 404, "No account found")
         if existing_user.sign_up_method != "google":
@@ -256,7 +275,7 @@ async def partner_google_sign_in(request: Request, schema: GoogleLTS360SignInSch
 
         return send_json_response(200, "User sign in successfully", data={
             "user_id":      existing_user.user_id,
-            "user_details": _build_user_response(existing_user, PROFILE_BASE_URL),
+            "user_details": _build_user_response(existing_user),
         })
     except Exception:
         return send_error_response(request, 500, "Internal server error")

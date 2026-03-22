@@ -63,3 +63,10 @@ async def reset_password(
     db:      AsyncSession = Depends(get_db),
 ):
     return await account_controller.reset_password(request, body, db)
+
+@router.post("/logout")
+async def log_out(
+    request: Request,
+    db:      AsyncSession = Depends(get_db),
+):
+    return await account_controller.log_out(request, db)
