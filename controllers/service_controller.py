@@ -660,9 +660,9 @@ async def create_service(
 
         for key in deleted_keys:
             await delete_from_s3(key)
-
+            
         await db.refresh(service, attribute_names=[ "thumbnail", "images", "plans", "location", "owner"])    
-        return send_json_response(200, "Service published", data=_published_service_response(service, service.thumbnail, service.images, service.plans, service.location))
+        return send_json_response(200, "Service published", data=_published_service_response(service))
     except Exception:
         for key in uploaded_keys:
             await delete_from_s3(key)
@@ -790,7 +790,7 @@ async def update_service_thumbnail(
             ))
             await db.flush()
 
-        db.refresh(service)
+        await db.refresh(service)
         return send_json_response(200, "Thumbnail updated", data=_parse_thumbnail(service.thumbnail))
     except Exception:
         if uploaded_key:
@@ -845,7 +845,6 @@ async def update_service_images(
         await db.flush()
 
         await db.refresh(service, attribute_names=["images"])
-
         return send_json_response(200, "Images updated", data=[
             {
                 "image_id":  img.id,
@@ -923,7 +922,6 @@ async def update_service_plans(
                 await db.delete(old_plan)
 
         await db.flush()
-
         await db.refresh(service)
         return send_json_response(200, "Plans updated", data=_parse_plans(service.plans))
     except Exception:
@@ -959,9 +957,9 @@ async def update_service_location(
                 geo=schema.geo,
                 location_type=schema.location_type,
             ))
+
         await db.flush()
         await db.refresh(service)
-
         return send_json_response(200, "Location updated", data={
             "latitude":      service.location.latitude,
             "longitude":     service.location.longitude,

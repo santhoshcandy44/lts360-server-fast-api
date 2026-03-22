@@ -160,9 +160,7 @@ def _used_product_listing_summary_response(
     }
 
 def _published_used_product_listing_response(
-    used_product_listing:  UsedProductListing,
-    images:   list[UsedProductListingImage],
-    location: UsedProductListingLocation
+    used_product_listing:  UsedProductListing
 ) -> dict:
     return {
         "used_product_listing_id": used_product_listing.used_product_listing_id,
@@ -183,14 +181,14 @@ def _published_used_product_listing_response(
                 "size":      img.size,
                 "format":    img.format,
             }
-            for img in sorted(images, key=lambda x: x.created_at, reverse=True)
+            for img in sorted(used_product_listing.images, key=lambda x: x.created_at, reverse=True)
         ],
         "location": {
-            "longitude":     float(location.longitude),
-            "latitude":      float(location.latitude),
-            "geo":           location.geo,
-            "location_type": location.location_type,
-        } if location else None,
+            "longitude":     float(used_product_listing.location.longitude),
+            "latitude":      float(used_product_listing.location.latitude),
+            "geo":           used_product_listing.location.geo,
+            "location_type": used_product_listing.location.location_type,
+        } if used_product_listing.location else None,
     }
 
 def _paginate_used_product_listings(items: list, used_product_listing:UsedProductListing | None, lastDistance: int | None, lastTotalRelavance: int | None,  page_size: int,  next_token: str = None ) -> dict:
@@ -376,7 +374,7 @@ async def _query_used_product_listings(
 
     last_row = rows[-1] if rows else None
 
-    jobs = [
+    usedProductListings = [
     _user_used_product_listing_summary_response(
         row.UsedProductListing,
         bool(row.is_bookmarked) if user_id else False,
@@ -385,7 +383,7 @@ async def _query_used_product_listings(
     for row in rows]
     
     return _paginate_used_product_listings(
-        jobs,
+        usedProductListings,
         getattr(last_row, "UsedProductListing", None),
         getattr(last_row, "distance", None) if has_loc else None,
         getattr(last_row, "total_relevance", None) if query else None,
@@ -403,7 +401,7 @@ async def guest_get_used_product_listings(request: Request, schema: GuestGetUsed
         lon = schema.longitude
 
         data = await _query_used_product_listings(db=db, page_size=page_size, query=s, user_lat=lat, user_long=lon, next_token=next_token)
-        return send_json_response(200, "Local jobs fetched", data= data)
+        return send_json_response(200, "Local usedProductListings fetched", data= data)
     except Exception:
         return send_error_response(request, 500, "Internal server error")
     
@@ -419,7 +417,7 @@ async def get_used_product_listings(request: Request, schema: GetUsedProductList
         lat, lon = (float(loc.latitude), float(loc.longitude)) if loc else (None, None)
 
         data = await _query_used_product_listings(db=db, user_id=user_id, page_size=page_size, query=s, user_lat=lat, user_lon=lon, next_token=next_token)
-        return send_json_response(200, "Local jobs fetched", data= data)
+        return send_json_response(200, "Local usedProductListings fetched", data= data)
     except Exception:
         return send_error_response(request, 500, "Internal server error")    
 
@@ -443,7 +441,7 @@ async def get_used_product_listing_by_used_product_listing_id(request: Request, 
             "phone_country_code": used_product_listing.owner.phone_country_code,
             "phone_number":       used_product_listing.owner.phone_number,
         }
-        return send_json_response(200, "Used product listing job retrived", data = data)
+        return send_json_response(200, "Used product listing retrived", data = data)
     except Exception:
         return send_error_response(request, 500, "Internal server error")
 
@@ -597,11 +595,14 @@ async def create_or_update_used_product_listing(
           await db.flush()
           used_product_listing = await db.scalar(
             select(UsedProductListing)
-            .options(selectinload(UsedProductListing.images))   
-            .options(selectinload(UsedProductListing.location))  
+            .options(
+                selectinload(UsedProductListing.images),
+                selectinload(UsedProductListing.location),
+                selectinload(UsedProductListing.owner),
+            )  
             .where(
                 UsedProductListing.used_product_listing_id == new_product.used_product_listing_id,
-                UsedProductListing.created_by   == user_id,
+                UsedProductListing.created_by   == user_id
             ))
           
         old_images = used_product_listing.images
@@ -613,7 +614,7 @@ async def create_or_update_used_product_listing(
 
         for image in images:
             contents = await image.read()
-            key      = f"media/{media_id}/local-jobs/{used_product_listing.used_product_listing_id}/{uuid.uuid4()}-{image.filename}"
+            key      = f"media/{media_id}/local-usedProductListings/{used_product_listing.used_product_listing_id}/{uuid.uuid4()}-{image.filename}"
             await upload_to_s3(contents, key, image.content_type)
             uploaded_keys.append(key)
 
@@ -655,7 +656,7 @@ async def create_or_update_used_product_listing(
             await delete_from_s3(key)
 
         await db.refresh(used_product_listing, attribute_names=["images", "location", "owner"])    
-        return send_json_response(200, "Local job published", data=_published_used_product_listing_response(used_product_listing, used_product_listing.images, used_product_listing.location))
+        return send_json_response(200, "Used product listing published", data=_published_used_product_listing_response(used_product_listing))
     except Exception:
         for key in uploaded_keys:
             await delete_from_s3(key)
@@ -691,7 +692,7 @@ async def get_published_used_product_listings(
 
     usedProductListings = (await db.execute(q)).scalars().all()
 
-    items = [_published_used_product_listing_response(used_product_listing, used_product_listing.images, used_product_listing.location) for used_product_listing in usedProductListings]
+    items = [_published_used_product_listing_response(used_product_listing) for used_product_listing in usedProductListings]
     last_row = usedProductListings[-1] if usedProductListings else None
     return send_json_response(
         200,

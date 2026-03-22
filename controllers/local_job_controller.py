@@ -6,6 +6,7 @@ from PIL import Image
 
 from fastapi import Request
 
+from kafka.notification_service_producer import send_local_job_applicant_applied_notification_to_kafka
 from schemas.local_job_schemas import (
     GuestGetLocalJobsSchema,
 
@@ -27,9 +28,8 @@ from sqlalchemy.dialects.mysql import insert, match
 from sqlalchemy.orm import selectinload
 
 from models.local_job import LocalJobSearchQuery
-from models.local_job import LocalJob, LocalJobImage, LocalJobLocation, LocalJobApplicant, LocalJobSearchQuery
+from models.local_job import LocalJob, LocalJobImage, LocalJobLocation, LocalJobApplication, LocalJobSearchQuery
 from models.user import User
-from models.chat import ChatInfo
 from models.user import UserLocation
 from models.bookmark import UserBookmarkLocalJob
 
@@ -37,7 +37,6 @@ from config import BASE_URL, PROFILE_BASE_URL, MEDIA_BASE_URL
 from helpers.response_helper import send_json_response, send_error_response
 from utils.pagination.cursor import encode_cursor, decode_cursor
 from utils.aws_s3 import upload_to_s3, delete_from_s3, delete_directory_from_s3
-# from kafka.notification_service_producer import send_local_job_applicant_applied_notification_to_kafka
 
 def _fmt_url(base, path):
     return f"{base}/{path}" if path else ""
@@ -257,8 +256,8 @@ async def _query_local_jobs(
     applicant_subq = (
     exists()
     .where(
-        LocalJobApplicant.local_job_id == LocalJob.local_job_id,
-        LocalJobApplicant.candidate_id == user_id
+        LocalJobApplication.local_job_id == LocalJob.local_job_id,
+        LocalJobApplication.candidate_id == user_id
         )
     ).label("is_applied")
 
@@ -419,9 +418,9 @@ async def get_local_job(request: Request, schema: LocalJobIdSchema, db: AsyncSes
             return send_error_response(request, 404, "Local local_job not exist")
         
         is_applied = await db.scalar(
-            select(LocalJobApplicant)
-            .where(LocalJobApplicant.local_job_id == schema.local_job_id)
-            .where(LocalJobApplicant.candidate_id == str(user_id))
+            select(LocalJobApplication)
+            .where(LocalJobApplication.local_job_id == schema.local_job_id)
+            .where(LocalJobApplication.candidate_id == str(user_id))
             ) is not None
 
         return send_json_response(200, "Local local_job retrived", data=_local_job_detail_response(
@@ -439,20 +438,25 @@ async def apply_local_job(request: Request, schema: LocalJobIdSchema, db: AsyncS
         )
         if not local_job:
             return send_error_response(request, 404, "Local local_job not exist")
-        applicant = LocalJobApplicant(
+        applicant = LocalJobApplication(
             candidate_id=user_id,
             local_job_id=schema.local_job_id
         )
         db.add(applicant)
-        await db.flush() 
         
-        # kafka_key = f"{schema.local_job_id}:{schema.local_job.created_by}:{user_id}"
-        # send_local_job_applicant_applied_notification_to_kafka(kafka_key, {
-        #     "user_id":         local_job.created_by,
-        #     "candidate_id":    user_id,
-        #     "local_job_title": local_job.title,
-        #     "application_id":  applicant.application_id,
-        # })
+        await db.flush()
+        await db.refresh(applicant) 
+        
+        kafka_key = f"{local_job.created_by}:{schema.local_job_id}:{applicant.application_id}"
+        await send_local_job_applicant_applied_notification_to_kafka(
+            kafka_key = kafka_key,
+            message={
+                "user_id":          local_job.created_by,
+                "candidate_id":     applicant.candidate_id,
+                "application_id":   applicant.application_id,
+                "title":  local_job.title,
+            }
+        )
         return send_json_response(200, "Applied successfully")
     except Exception:
         return send_error_response(request, 500, "Internal server error")
@@ -473,8 +477,11 @@ async def create_or_update_local_job(
 
         existing = await db.scalar(
             select(LocalJob)
-            .options(selectinload(LocalJob.images))   
-            .options(selectinload(LocalJob.location))
+           .options(
+                selectinload(LocalJob.images),
+                selectinload(LocalJob.location),
+                selectinload(LocalJob.owner),
+            )
             .where(
                 LocalJob.local_job_id == schema.local_job_id,
                 LocalJob.created_by   == user_id,
@@ -655,25 +662,25 @@ async def get_local_job_applications(
         return send_error_response(request, 404, "Local local_job not exist")
 
     q = (
-        select(LocalJobApplicant)
-        .where(LocalJobApplicant.local_job_id == local_job_id)
-        .options(selectinload(LocalJobApplicant.user).selectinload(User.location))
+        select(LocalJobApplication)
+        .where(LocalJobApplication.local_job_id == local_job_id)
+        .options(selectinload(LocalJobApplication.user).selectinload(User.location))
     )
 
     if payload:
         q = q.where(or_(
-            LocalJobApplicant.is_reviewed > payload["is_reviewed"],
-            and_(LocalJobApplicant.is_reviewed == payload["is_reviewed"],
-                 LocalJobApplicant.reviewed_at < payload["reviewed_at"]),
-            and_(LocalJobApplicant.is_reviewed == payload["is_reviewed"],
-                 LocalJobApplicant.reviewed_at == payload["reviewed_at"],
-                 LocalJobApplicant.id > payload["id"]),
+            LocalJobApplication.is_reviewed > payload["is_reviewed"],
+            and_(LocalJobApplication.is_reviewed == payload["is_reviewed"],
+                 LocalJobApplication.reviewed_at < payload["reviewed_at"]),
+            and_(LocalJobApplication.is_reviewed == payload["is_reviewed"],
+                 LocalJobApplication.reviewed_at == payload["reviewed_at"],
+                 LocalJobApplication.id > payload["id"]),
         ))
 
     q = q.order_by(
-        LocalJobApplicant.is_reviewed.asc(),
-        LocalJobApplicant.reviewed_at.desc(),
-        LocalJobApplicant.id.asc(),
+        LocalJobApplication.is_reviewed.asc(),
+        LocalJobApplication.reviewed_at.desc(),
+        LocalJobApplication.id.asc(),
     ).limit(page_size)
 
     rows = (await db.execute(q)).scalars().all()
@@ -733,8 +740,8 @@ async def mark_as_reviewed(request: Request, schema: LocalJobApplicationSchema, 
             return send_error_response(request, 404, "Local local_job not exist")
 
         await db.execute(
-            update(LocalJobApplicant)
-            .where(LocalJobApplicant.local_job_id == schema.local_job_id, LocalJobApplicant.application_id == schema.application_id)
+            update(LocalJobApplication)
+            .where(LocalJobApplication.local_job_id == schema.local_job_id, LocalJobApplication.application_id == schema.application_id)
             .values(is_reviewed=1, reviewed_at=datetime.now(timezone.utc))
         )
         return send_json_response(200, "Marked as reviewed")
@@ -752,8 +759,8 @@ async def unmark_as_reviewed(request: Request, schema: LocalJobApplicationSchema
             return send_error_response(request, 404, "Local local_job not exist")
 
         await db.execute(
-            update(LocalJobApplicant)
-            .where(LocalJobApplicant.local_job_id == schema.local_job_id, LocalJobApplicant.application_id == schema.application_id)
+            update(LocalJobApplication)
+            .where(LocalJobApplication.local_job_id == schema.local_job_id, LocalJobApplication.application_id == schema.application_id)
             .values(is_reviewed=0, reviewed_at=None)
         )
         return send_json_response(200, "Unmarked as reviewed")

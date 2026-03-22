@@ -4,3 +4,4 @@ alembic.ini
 __pycache__/
 *.pyc
 *.pyo
+config/service_account.json

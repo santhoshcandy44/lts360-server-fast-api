@@ -1,10 +1,11 @@
-# utils/fcm_utils.py
 import os
 import json
 import time
 import math
 import base64
 import httpx
+import os
+
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
@@ -12,6 +13,13 @@ from cryptography.hazmat.backends import default_backend
 from config import FCM_TOKEN_SECRET
 
 _SERVICE_ACCOUNT_PATH = os.path.join(os.path.dirname(__file__), "../config/service_account.json")
+
+if not os.path.exists(_SERVICE_ACCOUNT_PATH):
+    raise FileNotFoundError(f"FCM key file not found: {_SERVICE_ACCOUNT_PATH}")
+
+if os.path.getsize(_SERVICE_ACCOUNT_PATH) == 0:
+    raise ValueError(f"FCM key file is empty: {_SERVICE_ACCOUNT_PATH}")
+
 with open(_SERVICE_ACCOUNT_PATH, "r") as f:
     _KEY_JSON = json.load(f)
 
@@ -53,7 +61,6 @@ async def get_access_token() -> str:
         response.raise_for_status()
         return response.json()["access_token"]
 
-
 def decode_fcm_token(text: str) -> str:
     parts       = text.split(":")
     iv          = bytes.fromhex(parts[0])
@@ -65,7 +72,6 @@ def decode_fcm_token(text: str) -> str:
     # remove padding
     pad_len     = decrypted[-1]
     return decrypted[:-pad_len].decode("utf-8")
-
 
 async def send_fcm_notification(key: str, fcm_token: str, type: str, title: str, data: dict):
     access_token = await get_access_token()

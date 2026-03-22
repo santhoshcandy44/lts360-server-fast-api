@@ -24,8 +24,13 @@ async def lifespan(app: FastAPI):
     await engine.dispose()
     print("🛑 Shutting down")
 
-app = FastAPI(title=APP_NAME, lifespan=lifespan)
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # await start_consumers()
+    yield
 
+app = FastAPI(title=APP_NAME, lifespan=lifespan)
+    
 @app.exception_handler(AppException)
 async def valdiate_app_exception_handler(request: Request, exc: AppException):
     return send_error_response(request, exc.status_code, exc.message, exc.error_code)

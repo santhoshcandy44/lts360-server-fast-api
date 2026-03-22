@@ -120,8 +120,8 @@ class LocalJobSearchQuery(SQLModel, table=True):
     created_at:               datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at:               datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
  
-class LocalJobApplicant(SQLModel, table=True):
-    __tablename__ = "local_job_applicants"
+class LocalJobApplication(SQLModel, table=True):
+    __tablename__ = "local_job_applications"
 
     id:             int           = Field(sa_column=Column(BigInteger, primary_key=True, autoincrement=True))
     application_id: int           = Field(sa_column=Column(BigInteger, nullable=False))

@@ -5,7 +5,7 @@ import string
 from decimal import Decimal
 from typing import List, Optional
 
-from models.local_job import LocalJobApplicant
+from models.local_job import LocalJobApplication
 from sqlmodel import SQLModel, Field, Column, Relationship
 from sqlalchemy import Column, Integer, BigInteger, Text, ForeignKey, UniqueConstraint, Numeric, Enum as SAEnum, UniqueConstraint, event
 from sqlalchemy.orm import Session
@@ -72,7 +72,7 @@ class User(SQLModel, table=True):
         sa_relationship_kwargs={"lazy": "selectin"}
     )
 
-    application: list["LocalJobApplicant"] = Relationship(
+    application: list["LocalJobApplication"] = Relationship(
         back_populates="user",
         sa_relationship_kwargs={"lazy": "selectin"}
     )
