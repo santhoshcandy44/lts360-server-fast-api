@@ -5,7 +5,6 @@ import uuid
 from PIL import Image
 
 from fastapi import Request, UploadFile
-from schemas.account_schemas import ChangePasswordSchema, ForgotPasswordSchema, ForgotPasswordVerifyOTPSchema, ResetPasswordSchema, UpdateAccountTypeSchema
 from schemas.profile_schemas import SendPhoneOTPSchema, UpdateAboutSchema, UpdateEmailSchema, UpdateEmailVerifyOTPSchema, UpdateFirstNameSchema, UpdateLastNameSchema, UpdateLocationSchema, VerifyPhoneOTPSchema
 from sqlmodel import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -14,10 +13,9 @@ from models.user import User, UserLocation
 from models.user import FCMToken
 
 from helpers.response_helper import send_json_response, send_error_response
-from utils.auth import compare_password, decode_forgot_password_token, generate_forgot_password_token, generate_otp, generate_pepper, generate_salt, generate_tokens, hash_password, send_otp_email
+from utils.auth import generate_otp, generate_tokens, send_otp_email
 from utils.otp_store import save_otp, get_otp, delete_otp, is_expired
 from utils.aws_s3 import upload_to_s3
-
 
 def _user_response(user: User, location: UserLocation | None = None) -> dict:
     data = {
@@ -44,23 +42,6 @@ def _user_response(user: User, location: UserLocation | None = None) -> dict:
         } if location else None,
     }
     return data
-
-async def _get_user(user_id: int, db: AsyncSession) -> User | None:
-    result = await db.execute(select(User).where(User.user_id == user_id))
-    return result.scalar_one_or_none()
-
-
-async def _update_field(user_id: int, db: AsyncSession, **fields) -> User | None:
-    user = await _get_user(user_id, db)
-    if not user:
-        return None
-    for key, value in fields.items():
-        setattr(user, key, value)
-    user.updated_at = datetime.now(timezone.utc)
-    db.add(user)
-    await db.flush()
-    await db.refresh(user)
-    return user
 
 async def get_profile(request: Request, db: AsyncSession):
     try:
@@ -98,7 +79,7 @@ async def update_last_name(request: Request, schema: UpdateLastNameSchema, db: A
             .where(User.user_id == user_id)
             .values(last_name=schema.last_name)
         )
-        db.flush()
+        await db.flush()
         user = await db.execute(
             select(User.last_name, User.updated_at).where(User.user_id == user_id)
         )
@@ -118,7 +99,7 @@ async def update_about(request: Request, schema: UpdateAboutSchema, db: AsyncSes
             .where(User.user_id == user_id)
             .values(about=schema.about)
         )
-        db.flush()
+        await db.flush()
         user = await db.execute(
             select(User.about, User.updated_at).where(User.user_id == user_id)
         )
@@ -162,7 +143,7 @@ async def update_profile_pic(request: Request, profile_pic: UploadFile, db: Asyn
             .where(User.user_id == user_id)
             .values(profile_pic_url=key,profile_pic_url_96x96=key_96x96)
         )
-        db.flush()
+        await db.flush()
         user = await db.execute(
             select(User.profile_pic_url, User.profile_pic_url_96x96, User.updated_at).where(User.user_id == user_id)
         )
@@ -182,7 +163,6 @@ async def update_email(request: Request, schema: UpdateEmailSchema, db: AsyncSes
 
         otp = generate_otp()
         await save_otp(key=f"email_update_{schema.email}", otp=otp, email=schema.email)
-
         response = await send_otp_email(schema.email, otp)
         if not response["success"]:
             return send_error_response(request, 500, "Failed to send OTP")
@@ -252,7 +232,7 @@ async def verify_phone_otp(request: Request, body:VerifyPhoneOTPSchema, db: Asyn
                     .where(User.user_id == user_id)
                     .values(phone_country_code=code, phone_number=number, is_phone_verified=1)     
          )
-        db.flush()
+        await db.flush()
         user = await db.execute(
             select(User.phone_country_code, User.phone_number, User.is_phone_verified, User.updated_at).where(User.user_id == user_id)
         )

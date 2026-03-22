@@ -581,6 +581,7 @@ async def create_or_update_local_job(
         await db.refresh(local_job, attribute_names=["images", "location", "owner"])    
         return send_json_response(200, "Local local_job saved", data=_published_local_job_response(local_job))
     except Exception:
+        await db.rollback() 
         for key in uploaded_keys:
             await delete_from_s3(key)
         return send_error_response(request, 500, "Internal server error")

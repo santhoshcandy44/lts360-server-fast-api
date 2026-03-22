@@ -1,23 +1,16 @@
-from datetime import datetime, timezone
-import io
 from config import PROFILE_BASE_URL
-import uuid
-from PIL import Image
 
-from fastapi import Request, UploadFile
+from fastapi import Request
 from schemas.account_schemas import ChangePasswordSchema, ForgotPasswordSchema, ForgotPasswordVerifyOTPSchema, ResetPasswordSchema, UpdateAccountTypeSchema
-from schemas.profile_schemas import UpdateAboutSchema, UpdateEmailSchema, UpdateEmailVerifyOTPSchema, UpdateFirstNameSchema, UpdateLastNameSchema
 from sqlmodel import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from models.user import User, UserLocation
+from models.user import User
 from models.user import FCMToken
 
 from helpers.response_helper import send_json_response, send_error_response
 from utils.auth import compare_password, decode_forgot_password_token, generate_forgot_password_token, generate_otp, generate_pepper, generate_salt, generate_tokens, hash_password, send_otp_email
 from utils.otp_store import save_otp, get_otp, delete_otp, is_expired
-from utils.aws_s3 import upload_to_s3
-
 
 async def update_account_type(request: Request, schema: UpdateAccountTypeSchema, db: AsyncSession):
     try:

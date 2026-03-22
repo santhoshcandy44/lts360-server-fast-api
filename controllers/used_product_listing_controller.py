@@ -614,7 +614,7 @@ async def create_or_update_used_product_listing(
 
         for image in images:
             contents = await image.read()
-            key      = f"media/{media_id}/local-usedProductListings/{used_product_listing.used_product_listing_id}/{uuid.uuid4()}-{image.filename}"
+            key      = f"media/{media_id}/used-product-listings/{used_product_listing.used_product_listing_id}/{uuid.uuid4()}-{image.filename}"
             await upload_to_s3(contents, key, image.content_type)
             uploaded_keys.append(key)
 
@@ -658,6 +658,11 @@ async def create_or_update_used_product_listing(
         await db.refresh(used_product_listing, attribute_names=["images", "location", "owner"])    
         return send_json_response(200, "Used product listing published", data=_published_used_product_listing_response(used_product_listing))
     except Exception:
+        import traceback
+        import sys
+        traceback.print_exc(file=sys.stderr)
+        sys.stderr.flush()
+        await db.rollback() 
         for key in uploaded_keys:
             await delete_from_s3(key)
         return send_error_response(request, 500, "Internal server error")

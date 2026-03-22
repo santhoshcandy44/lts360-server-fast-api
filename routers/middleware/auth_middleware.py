@@ -30,10 +30,10 @@ async def authenticate_token(
             select(User).where(User.user_id == payload["userId"])
         )
         if not existing_user:
-            raise AppException(401, "User not found", "USER_NOT_FOUND")
+            raise AppException(401, "Something went wrong", "USER_NOT_FOUND")
 
         if str(existing_user.last_sign_in) != payload.get("lastSignIn"):
-            raise AppException(498, "Invalid session", "INVALID_SESSION")
+            raise AppException(498, "Something went wrong", "INVALID_SESSION")
 
         request.state.user = existing_user
         return existing_user

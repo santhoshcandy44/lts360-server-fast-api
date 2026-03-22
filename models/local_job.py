@@ -59,7 +59,7 @@ class LocalJob(SQLModel, table=True):
         sa_relationship_kwargs={"lazy": "selectin"}
     )
 
-    applications: List["LocalJobApplicant"] = Relationship(back_populates="local_job", sa_relationship_kwargs={"lazy": "selectin"})
+    applications: List["LocalJobApplication"] = Relationship(back_populates="local_job", sa_relationship_kwargs={"lazy": "selectin"})
 
     bookmarks: List["UserBookmarkLocalJob"] = Relationship(
         back_populates="local_job",

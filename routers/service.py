@@ -132,6 +132,40 @@ async def get_me_services(
 ):
     return await service_controller.get_published_services(request, schema, db)
 
+@router.get("/search-suggestions")
+async def search_suggestions(
+    request: Request,
+    schema:  ServiceSearchSuggestionsSchema = Depends(),
+    db:      AsyncSession = Depends(get_db),
+    _:       None = Depends(authenticate_token),
+):
+    return await service_controller.services_search_suggestions(request, schema, db)
+
+@router.get("/industries/options")
+async def get_industries_options(
+    request: Request,
+    db:      AsyncSession = Depends(get_db),
+    _:       None = Depends(authenticate_token),
+):
+    return await service_controller.get_industries(request, db)
+
+@router.get("/industries")
+async def get_industries(
+    request: Request,
+    db:      AsyncSession = Depends(get_db),
+    _:       None = Depends(authenticate_token),
+):
+    return await service_controller.get_user_industries(request, db)
+
+@router.put("/industries")
+async def update_industries(
+    schema:    UpdateIndustriesSchema,
+    request: Request,
+    db:      AsyncSession = Depends(get_db),
+    _:       None = Depends(authenticate_token),
+):
+    return await service_controller.update_industries(request, schema, db)
+
 @router.get("/{service_id}")
 async def get_service_by_service_id(
     request: Request,
@@ -225,37 +259,3 @@ async def unbookmark_service(
 ):
     return await service_controller.unbookmark_service(request, schema, db)
 
-@router.get("/search-suggestions")
-async def search_suggestions(
-    request: Request,
-    schema:  ServiceSearchSuggestionsSchema = Depends(),
-    db:      AsyncSession = Depends(get_db),
-    _:       None = Depends(authenticate_token),
-):
-    return await service_controller.services_search_suggestions(request, schema, db)
-
-@router.get("/industries/options")
-async def get_industries_options(
-    request: Request,
-    db:      AsyncSession = Depends(get_db),
-    _:       None = Depends(authenticate_token),
-):
-    return await service_controller.get_industries(request, db)
-
-@router.get("/industries")
-async def get_industries(
-    request: Request,
-    db:      AsyncSession = Depends(get_db),
-    _:       None = Depends(authenticate_token),
-):
-    return await service_controller.get_user_industries(request, db)
-
-
-@router.put("/industries")
-async def update_industries(
-    schema:    UpdateIndustriesSchema,
-    request: Request,
-    db:      AsyncSession = Depends(get_db),
-    _:       None = Depends(authenticate_token),
-):
-    return await service_controller.update_industries(request, schema, db)

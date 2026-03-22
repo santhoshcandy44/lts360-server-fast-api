@@ -119,8 +119,7 @@ async def verify_otp(request: Request, schema: VerifyOTPSchema, db: AsyncSession
         await db.refresh(new_user)
 
         tokens = generate_tokens(new_user.user_id, new_user.email, "legacy_email", new_user.last_sign_in)
-        await create_default_boards_for_user(new_user.user_id, db)
-        boards = await get_boards(new_user.user_id, db)
+        boards = await create_default_boards_for_user(new_user.user_id, db)
         await delete_otp(email)
 
         return send_json_response(201, "User registered successfully", data={
@@ -130,10 +129,6 @@ async def verify_otp(request: Request, schema: VerifyOTPSchema, db: AsyncSession
             "boards":        boards,
         })
     except Exception:
-        import traceback
-        import sys
-        traceback.print_exc(file=sys.stderr)
-        sys.stderr.flush()
         return send_error_response(request, 500, "Internal server error")
 
 async def google_sign_up(request: Request, schema: GoogleSignUpSchema, db: AsyncSession):

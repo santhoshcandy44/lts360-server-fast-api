@@ -664,6 +664,7 @@ async def create_service(
         await db.refresh(service, attribute_names=[ "thumbnail", "images", "plans", "location", "owner"])    
         return send_json_response(200, "Service published", data=_published_service_response(service))
     except Exception:
+        await db.rollback() 
         for key in uploaded_keys:
             await delete_from_s3(key)
         return send_error_response(request, 500, "Internal server error")
@@ -793,6 +794,7 @@ async def update_service_thumbnail(
         await db.refresh(service)
         return send_json_response(200, "Thumbnail updated", data=_parse_thumbnail(service.thumbnail))
     except Exception:
+        await db.rollback() 
         if uploaded_key:
             await delete_from_s3(uploaded_key)
         return send_error_response(request, 500, "Internal server error")
@@ -857,6 +859,7 @@ async def update_service_images(
             for img in service.images
         ])
     except Exception:
+        await db.rollback() 
         for key in uploaded_keys:
             await delete_from_s3(key)
         return send_error_response(request, 500, "Internal server error")
