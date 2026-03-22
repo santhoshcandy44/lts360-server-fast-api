@@ -129,7 +129,7 @@ def _local_job_detail_response(
                     "size":      img.size,
                     "format":    img.format,
                 }
-                for img in sorted(images, key=lambda x: x.created_at, reverse=True)
+                for img in sorted(local_job.images, key=lambda x: x.created_at, reverse=True)
             ],
             "location": {
                 "geo":           local_job.location.geo,
@@ -438,27 +438,31 @@ async def apply_local_job(request: Request, schema: LocalJobIdSchema, db: AsyncS
         )
         if not local_job:
             return send_error_response(request, 404, "Local local_job not exist")
-        applicant = LocalJobApplication(
+        application = LocalJobApplication(
             candidate_id=user_id,
             local_job_id=schema.local_job_id
         )
-        db.add(applicant)
+        db.add(application)
         
         await db.flush()
-        await db.refresh(applicant) 
+        await db.refresh(application) 
         
-        kafka_key = f"{local_job.created_by}:{schema.local_job_id}:{applicant.application_id}"
+        kafka_key = f"{local_job.created_by}:{schema.local_job_id}:{application.application_id}"
         await send_local_job_applicant_applied_notification_to_kafka(
             kafka_key = kafka_key,
             message={
                 "user_id":          local_job.created_by,
-                "candidate_id":     applicant.candidate_id,
-                "application_id":   applicant.application_id,
+                "candidate_id":     application.candidate_id,
+                "application_id":   application.application_id,
                 "title":  local_job.title,
             }
         )
         return send_json_response(200, "Applied successfully")
     except Exception:
+        import traceback
+        import sys
+        traceback.print_exc(file=sys.stderr)
+        sys.stderr.flush()
         return send_error_response(request, 500, "Internal server error")
 
 async def create_or_update_local_job(
@@ -579,7 +583,7 @@ async def create_or_update_local_job(
             await delete_from_s3(key)
 
         await db.refresh(local_job, attribute_names=["images", "location", "owner"])    
-        return send_json_response(200, "Local local_job saved", data=_published_local_job_response(local_job))
+        return send_json_response(200, "Local job published", data=_published_local_job_response(local_job))
     except Exception:
         await db.rollback() 
         for key in uploaded_keys:
@@ -665,7 +669,7 @@ async def get_local_job_applications(
     q = (
         select(LocalJobApplication)
         .where(LocalJobApplication.local_job_id == local_job_id)
-        .options(selectinload(LocalJobApplication.user).selectinload(User.location))
+        .options(selectinload(LocalJobApplication.user))
     )
 
     if payload:
@@ -689,14 +693,14 @@ async def get_local_job_applications(
     applications = []
     last_row = None
 
-    for applicant in rows:
-        u  = applicant.user
+    for application in rows:
+        u  = application.user
         ul = u.location if u else None
 
         applications.append({
-            "application_id": applicant.application_id,
-            "applied_at": applicant.applied_at,
-            "is_reviewed": bool(applicant.is_reviewed),
+            "application_id": application.application_id,
+            "applied_at": str(application.applied_at),
+            "is_reviewed": bool(application.is_reviewed),
             "contact_info": {
                 "email": u.email,
                 "phone_country_code": u.phone_country_code,
@@ -717,7 +721,7 @@ async def get_local_job_applications(
                 "joined_at": str(u.created_at.year) if u.created_at else None,
             } if u else None,
         })
-        last_row = applicant
+        last_row = application
 
     next_token_out = encode_cursor({
         "is_reviewed": last_row.is_reviewed,
@@ -731,7 +735,7 @@ async def get_local_job_applications(
         "previous_token": next_token if payload else None,
     })
 
-async def mark_as_reviewed(request: Request, schema: LocalJobApplicationSchema, db: AsyncSession):
+async def mark_as_reviewed_local_job_application(request: Request, schema: LocalJobApplicationSchema, db: AsyncSession):
     try:
         user_id = request.state.user.user_id
         local_job = await db.scalar(
@@ -749,7 +753,7 @@ async def mark_as_reviewed(request: Request, schema: LocalJobApplicationSchema, 
     except Exception:
         return send_error_response(request, 500, "Internal server error")
 
-async def unmark_as_reviewed(request: Request, schema: LocalJobApplicationSchema, db: AsyncSession):
+async def unmark_reviewed_local_job_application(request: Request, schema: LocalJobApplicationSchema, db: AsyncSession):
     try:
         user_id = request.state.user.user_id
         

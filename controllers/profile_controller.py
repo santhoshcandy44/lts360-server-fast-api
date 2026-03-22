@@ -1,4 +1,3 @@
-from datetime import datetime, timezone
 import io
 from config import PROFILE_BASE_URL
 import uuid
@@ -10,7 +9,6 @@ from sqlmodel import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.user import User, UserLocation
-from models.user import FCMToken
 
 from helpers.response_helper import send_json_response, send_error_response
 from utils.auth import generate_otp, generate_tokens, send_otp_email
@@ -206,6 +204,7 @@ async def update_email_otp_verify(request: Request, schema: UpdateEmailVerifyOTP
 async def send_phone_otp(request: Request, body:SendPhoneOTPSchema, db: AsyncSession):
     try:
         otp = generate_otp()
+        print(otp)
         await save_otp(key=f"phone_{body.phone_number}", otp=otp, email=body.phone_number)
         return send_json_response(200, "OTP sent to phone number")
     except Exception:

@@ -123,7 +123,7 @@ async def mark_as_reviewed_local_job(
     db:      AsyncSession = Depends(get_db),
     _:       None = Depends(authenticate_token),
 ):
-    return await local_job_controller.mark_as_reviewed_local_job(request, schema, db)
+    return await local_job_controller.mark_as_reviewed_local_job_application(request, schema, db)
 
 @router.delete("/{local_job_id}/applications/{application_id}/review")
 async def unmark_reviewed_local_job(
@@ -132,7 +132,7 @@ async def unmark_reviewed_local_job(
     db:      AsyncSession = Depends(get_db),
     _:       None = Depends(authenticate_token),
 ):
-    return await local_job_controller.unmark_reviewed_local_job(request, schema, db)
+    return await local_job_controller.unmark_reviewed_local_job_application(request, schema, db)
 
 @router.post("/{local_job_id}/bookmark")
 async def bookmark_local_job(

@@ -153,3 +153,15 @@ def before_insert_local_job(mapper, connection, target):
  
     if not target.short_code:
         target.short_code = _generate_short_code()
+
+
+@event.listens_for(LocalJobApplication, "before_insert")
+def before_insert_local_job_application(mapper, connection, target):
+    session = Session(bind=connection)
+ 
+    while True:
+        new_id = random.randint(10_000_000, 99_999_999)
+        exists = session.query(LocalJobApplication).filter_by(application_id=new_id).first()
+        if not exists:
+            target.application_id = new_id
+            break       

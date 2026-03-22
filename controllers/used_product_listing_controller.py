@@ -658,10 +658,6 @@ async def create_or_update_used_product_listing(
         await db.refresh(used_product_listing, attribute_names=["images", "location", "owner"])    
         return send_json_response(200, "Used product listing published", data=_published_used_product_listing_response(used_product_listing))
     except Exception:
-        import traceback
-        import sys
-        traceback.print_exc(file=sys.stderr)
-        sys.stderr.flush()
         await db.rollback() 
         for key in uploaded_keys:
             await delete_from_s3(key)
