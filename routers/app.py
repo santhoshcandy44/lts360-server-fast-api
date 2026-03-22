@@ -8,7 +8,7 @@ from schemas.app_schemas import (
     UpdateFCMTokenRequest,
     UpdateE2EEPublicKeyRequest,
     SyncContactsRequest,
-    GetBookmarksRequest,
+    GetBookmarksSchema,
     SearchChatsRequest,
     LookupByPhoneRequest,
 )
@@ -43,7 +43,7 @@ async def update_e2ee_public_key(
 @router.get("/bookmarks")
 async def get_bookmarks(
     request: Request,
-    params:  GetBookmarksRequest = Depends(),
+    params:  GetBookmarksSchema = Depends(),
     db:      AsyncSession = Depends(get_db),
 ):
     return await app_controller.get_bookmarks(request, params, db)

@@ -65,7 +65,7 @@ class UsedProductListingImage(SQLModel, table=True):
  
     id:                      Optional[int] = Field(primary_key=True)
     used_product_listing_id: int           = Field(sa_column=Column(BigInteger, ForeignKey("used_product_listings.used_product_listing_id", ondelete="CASCADE"), nullable=False, index=True))
-    image_url:               str           = Field()
+    url:                    str           = Field()
     width:                   int           = Field()
     height:                  int           = Field()
     size:                    int           = Field()

@@ -20,7 +20,7 @@ from fastapi import Request
 from sqlmodel import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from models.users import User
+from models.user import User
 from .board_controller import create_default_boards_for_user, get_boards, get_boards_by_user_id
 
 def _build_user_response(result, profile_base_url: str) -> dict:
@@ -357,10 +357,6 @@ async def refresh_token(request: Request, db: AsyncSession):
         try:
             payload = jwt.decode(token, REFRESH_TOKEN_SECRET, algorithms=["HS256"])
         except JWTError as e:
-            import traceback
-            import sys
-            traceback.print_exc(file=sys.stderr)
-            sys.stderr.flush()
             if "expired" in str(e).lower():
                 decoded = get_unverified_claims(token)
                 user_id = decoded.get("userId")

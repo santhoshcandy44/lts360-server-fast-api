@@ -34,11 +34,10 @@ from sqlalchemy import func, or_, and_, delete, exists
 from sqlalchemy.dialects.mysql import insert, match
 from sqlalchemy.orm import selectinload
 
-from models.services import Service, ServiceIndustry, ServiceThumbnail, ServiceImage, ServiceLocation , ServicePlan, ServiceSearchQuery
-from models.users import UserServiceIndustry
-from models.users import User, UserLocation
-from models.chats import ChatInfo
-from models.bookmarks import UserBookmarkService
+from models.service import Service, ServiceIndustry, ServiceThumbnail, ServiceImage, ServiceLocation , ServicePlan, ServiceSearchQuery
+from models.user import UserServiceIndustry
+from models.user import User, UserLocation
+from models.bookmark import UserBookmarkService
 
 from config import BASE_URL, PROFILE_BASE_URL, MEDIA_BASE_URL
 from helpers.response_helper import send_json_response, send_error_response
@@ -46,7 +45,7 @@ from utils.pagination.cursor import encode_cursor, decode_cursor
 from utils.aws_s3 import upload_to_s3, delete_from_s3, delete_directory_from_s3
 
 def _fmt_url(base, path):
-    return f"{base}/{path}" if path else None
+    return f"{base}/{path}" if path else ""
 
 def _parse_plans(plans: list[ServicePlan]) -> list[dict]:
     return [
@@ -68,7 +67,7 @@ def _parse_thumbnail(t: ServiceThumbnail | None) -> dict | None:
         return None
     return {
         "thumbnail_id":     t.id,
-        "url":    _fmt_url(MEDIA_BASE_URL, t.image_url),
+        "url":    _fmt_url(MEDIA_BASE_URL, t.url),
         "width":  t.width,
         "height": t.height,
         "size":   t.size,
@@ -137,22 +136,22 @@ def _user_service_detail_response(
             "slug":              f"{BASE_URL}/service/{service.short_code}",
             "is_bookmarked":     is_bookmarked,
             "distance":          distance,
-            "thumbnail":         _parse_thumbnail(thumbnail),
+            "thumbnail":         _parse_thumbnail(service.thumbnail),
             "images": [
                 {
                     "image_id":  img.id,
-                    "image_url": _fmt_url(MEDIA_BASE_URL, img.image_url),
+                    "url": _fmt_url(MEDIA_BASE_URL, img.url),
                     "width":     img.width,
                     "height":    img.height,
                     "size":      img.size,
                     "format":    img.format,
                 }
-                for img in sorted(images, key=lambda x: x.created_at, reverse=True)
+                for img in sorted(service.images, key=lambda x: x.created_at, reverse=True)
             ],
-            "plans":    _parse_plans(plans),
+            "plans":             _parse_plans(service.plans),
             "location": {
-                "geo":           location.geo,
-            } if location else None,
+                "geo":           service.location.geo,
+            } if service.location else None,
         }
     }
 
@@ -195,7 +194,7 @@ def _published_service_response(
             "images": [
                 {
                     "image_id":  img.id,
-                    "image_url": _fmt_url(MEDIA_BASE_URL, img.image_url),
+                    "url": _fmt_url(MEDIA_BASE_URL, img.url),
                     "width":     img.width,
                     "height":    img.height,
                     "size":      img.size,
@@ -459,15 +458,7 @@ async def get_service_by_service_id(request: Request, schema: ServiceIdSchema, d
 
         if not service:
             return send_error_response(request, 404, "Used service listing not exist")
-        data=_user_service_detail_response(
-            service=service,
-            thumbnail=service.thumbnail,
-            images=service.images,
-            plans=service.plans,
-            location=service.location,
-            owner=service.owner,
-            chat=service.owner.chat_info
-            )    
+        data=_user_service_detail_response(service=service)    
         return send_json_response(200, "Used service listing job retrived", data = data)
     except Exception:
         return send_error_response(request, 500, "Internal server error")
@@ -570,7 +561,7 @@ async def get_services_by_user_id(
 
         services = (await db.execute(q)).all()
 
-        items = [_user_service_summary_response(service,  bool(is_bookmarked)) for service, is_bookmarked in services]
+        items = [_user_service_summary_response(service, bool(is_bookmarked)) for service, is_bookmarked in services]
         last_row = services[-1] if services else None
         return send_json_response(200,"Services listings retrieved", data=_paginate_services_by_service(items, last_row.Service, page_size, next_token if payload else None))
     except Exception:
@@ -613,7 +604,7 @@ async def create_service(
 
         db.add(ServiceThumbnail(
             service_id = service.service_id,
-            image_url    = key,
+            url    = key,
             width        = width,
             height       = height,
             size         = len(contents),
@@ -633,7 +624,7 @@ async def create_service(
  
             db.add(ServiceImage(
                 service_id   = service.service_id,
-                image_url    = key,
+                url    = key,
                 width        = width,
                 height       = height,
                 size         = len(contents),
@@ -710,13 +701,9 @@ async def get_published_services(
 
         services = (await db.execute(q)).scalars().all()
 
-        items = [_published_service_response(service, service.thumbnail, service.images, service.plans, service.location) for service in services]
+        items = [_published_service_response(service) for service in services]
         last_row = services[-1] if services else None
-        return send_json_response(
-            200,
-            "Services retrieved",
-            data=_paginate_services_by_service(items, last_row, page_size, next_token if payload else None)
-            )
+        return send_json_response(200, "Services retrieved", data=_paginate_services_by_service(items, last_row, page_size, next_token if payload else None) )
     except Exception:
          return send_error_response(request, 500, "Internal server error")
 
@@ -784,8 +771,8 @@ async def update_service_thumbnail(
 
         existing = service.thumbnail
         if existing:
-            old_key = existing.image_url
-            existing.image_url = new_key
+            old_key = existing.url
+            existing.url = new_key
             existing.size      = len(contents)
             existing.width     = width
             existing.height    = height
@@ -795,7 +782,7 @@ async def update_service_thumbnail(
             await delete_from_s3(old_key)
         else:
             db.add(ServiceThumbnail(
-                service_id=schema.service_id, image_url=new_key,
+                service_id=schema.service_id, url=new_key,
                 width=width, 
                 height=height, 
                 size=len(contents), 
@@ -835,7 +822,7 @@ async def update_service_images(
 
         for img in old_images:
             if img.id not in schema.keep_image_ids:
-                await delete_from_s3(img.image_url)
+                await delete_from_s3(img.url)
                 await db.delete(img)
 
         images  = schema.images or []  
@@ -849,7 +836,7 @@ async def update_service_images(
             width, height = img.size
             db.add(ServiceImage(
                 service_id=service.service_id,
-                image_url=key,
+                url=key,
                 width=width, 
                 height=height, 
                 size=len(contents), 
@@ -862,7 +849,7 @@ async def update_service_images(
         return send_json_response(200, "Images updated", data=[
             {
                 "image_id":  img.id,
-                "image_url": _fmt_url(MEDIA_BASE_URL, img.image_url),
+                "url": _fmt_url(MEDIA_BASE_URL, img.url),
                 "width":     img.width,
                 "height":    img.height,
                 "size":      img.size,

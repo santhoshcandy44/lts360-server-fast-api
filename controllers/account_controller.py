@@ -10,8 +10,8 @@ from schemas.profile_schemas import UpdateAboutSchema, UpdateEmailSchema, Update
 from sqlmodel import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from models.users import User, UserLocation
-from models.users import FCMToken
+from models.user import User, UserLocation
+from models.user import FCMToken
 
 from helpers.response_helper import send_json_response, send_error_response
 from utils.auth import compare_password, decode_forgot_password_token, generate_forgot_password_token, generate_otp, generate_pepper, generate_salt, generate_tokens, hash_password, send_otp_email

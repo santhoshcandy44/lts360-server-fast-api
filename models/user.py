@@ -5,7 +5,7 @@ import string
 from decimal import Decimal
 from typing import List, Optional
 
-from models.local_jobs import LocalJobApplicant
+from models.local_job import LocalJobApplicant
 from sqlmodel import SQLModel, Field, Column, Relationship
 from sqlalchemy import Column, Integer, BigInteger, Text, ForeignKey, UniqueConstraint, Numeric, Enum as SAEnum, UniqueConstraint, event
 from sqlalchemy.orm import Session

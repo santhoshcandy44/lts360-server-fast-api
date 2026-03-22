@@ -7,15 +7,16 @@ from typing import Optional, List
 
 from schemas.used_product_listing_schemas import (
     GuestGetUsedProductListingsSchema,
+
     GetUsedProductListingsSchema,
-    GetUsedProductListingsByUserIdSchema,
-    GetUserProfileSchema,
-    GetMeUsedProductListingsSchema,
-    UsedProductSearchSuggestionsSchema,
     UsedProductListingIdParam,
-    UserIdParam,
+    GetUserProfileUsedProductListingsSchema,
+    GetUsedProductListingsByUserIdSchema,
+    GetPublishedUsedProductListingsSchema,
     CreateOrUpdateUsedProductListingSchema,
     create_or_update_used_product_listing_form,
+
+    UsedProductListingsSearchSuggestionsSchema
 )
 
 from controllers import used_product_listing_controller
@@ -25,37 +26,6 @@ router = APIRouter(
     tags=["Used Product Listings"],
 )
 
-
-# ── GUEST routes ──────────────────────────────────────────────────
-
-@router.get("/guest/search-suggestions")
-async def guest_used_product_listings_search_suggestions(
-    request: Request,
-    schema:  UsedProductSearchSuggestionsSchema = Depends(),
-    db:      AsyncSession = Depends(get_db),
-):
-    return await used_product_listing_controller.search_suggestions(request, schema, db)
-
-
-@router.get("/guest/users/profile/{user_id}")
-async def guest_get_user_profile_and_used_product_listings_by_user_id(
-    request: Request,
-    schema:  UserIdParam = Depends(),
-    query:   GetUserProfileSchema = Depends(),
-    db:      AsyncSession = Depends(get_db),
-):
-    return await used_product_listing_controller.guest_get_user_profile_and_used_product_listings_by_user_id(request, schema, query, db)
-
-
-@router.get("/guest/users/{user_id}")
-async def guest_get_used_product_listings_by_user_id(
-    request: Request,
-    schema:   GetUsedProductListingsByUserIdSchema = Depends(),
-    db:      AsyncSession = Depends(get_db),
-):
-    return await used_product_listing_controller.guest_get_used_product_listings_by_user_id(request, schema, db)
-
-
 @router.get("/guest")
 async def guest_get_used_product_listings(
     request: Request,
@@ -64,6 +34,23 @@ async def guest_get_used_product_listings(
 ):
     return await used_product_listing_controller.guest_get_used_product_listings(request, schema, db)
 
+@router.get("/guest/users/profile/{user_id}")
+async def guest_get_user_profile_and_used_product_listings_by_user_id(
+    request: Request,
+    schema:   GetUserProfileUsedProductListingsSchema = Depends(),
+    db:      AsyncSession = Depends(get_db),
+):
+    return await used_product_listing_controller.get_user_profile_and_used_product_listings(request, schema, db)
+
+
+@router.get("/guest/users/{user_id}")
+async def guest_get_used_product_listings_by_user_id(
+    request: Request,
+    schema:   GetUsedProductListingsByUserIdSchema = Depends(),
+    db:      AsyncSession = Depends(get_db),
+):
+    return await used_product_listing_controller.get_used(request, schema, db)
+
 
 @router.get("/guest/{used_product_listing_id}")
 async def guest_get_used_product_listing_by_id(
@@ -71,39 +58,24 @@ async def guest_get_used_product_listing_by_id(
     schema:  UsedProductListingIdParam = Depends(),
     db:      AsyncSession = Depends(get_db),
 ):
-    return await used_product_listing_controller.guest_get_used_product_listing_by_used_product_listing_id(request, schema, db)
+    return await used_product_listing_controller.get_used_product_listing_by_used_product_listing_id(request, schema, db)
 
-
-# ── AUTHENTICATED routes ──────────────────────────────────────────
-
-@router.get("/search-suggestions")
-async def used_product_listings_search_suggestions(
+@router.get("/guest/search-suggestions")
+async def guest_used_product_listings_search_suggestions(
     request: Request,
-    schema:  UsedProductSearchSuggestionsSchema = Depends(),
+    schema:  UsedProductListingsSearchSuggestionsSchema = Depends(),
     db:      AsyncSession = Depends(get_db),
-    _:       None = Depends(authenticate_token),
 ):
     return await used_product_listing_controller.used_product_listings_search_suggestions(request, schema, db)
-
-
-@router.get("/me")
-async def get_me_used_product_listings(
-    request: Request,
-    schema:  GetMeUsedProductListingsSchema = Depends(),
-    db:      AsyncSession = Depends(get_db),
-    _:       None = Depends(authenticate_token),
-):
-    return await used_product_listing_controller.get_me_used_product_listings(request, schema, db)
-
 
 @router.get("/users/profile/{user_id}")
 async def get_user_profile_and_used_product_listings_by_user_id(
     request: Request,
-    schema:   GetUserProfileSchema = Depends(),
+    schema:   GetUserProfileUsedProductListingsSchema = Depends(),
     db:      AsyncSession = Depends(get_db),
     _:       None = Depends(authenticate_token),
 ):
-    return await used_product_listing_controller.get_profile_and_used_product_listings(request, schema, db)
+    return await used_product_listing_controller.get_user_profile_and_used_product_listings(request, schema, db)
 
 
 @router.get("/users/{user_id}")
@@ -115,7 +87,6 @@ async def get_used_product_listings_by_user_id(
 ):
     return await used_product_listing_controller.get_used_product_listings_by_user_id(request, schema, db)
 
-
 @router.get("")
 async def get_used_product_listings(
     request: Request,
@@ -124,19 +95,6 @@ async def get_used_product_listings(
     _:       None = Depends(authenticate_token),
 ):
     return await used_product_listing_controller.get_used_product_listings(request, schema, db)
-
-
-@router.get("/{used_product_listing_id}")
-async def get_used_product_listing_by_id(
-    request: Request,
-    schema:  UsedProductListingIdParam = Depends(),
-    db:      AsyncSession = Depends(get_db),
-    _:       None = Depends(authenticate_token),
-):
-    return await used_product_listing_controller.get_used_product_listing_by_user_id(request, schema, db)
-
-
-# ── WRITE routes ──────────────────────────────────────────────────
 
 @router.post("")
 async def create_or_update_used_product_listing(
@@ -147,6 +105,24 @@ async def create_or_update_used_product_listing(
     _:       None = Depends(authenticate_token),
 ):
     return await used_product_listing_controller.create_or_update_used_product_listing(request, schema, db)
+
+@router.get("/published")
+async def get_published_used_product_listings(
+    request: Request,
+    schema:  GetPublishedUsedProductListingsSchema = Depends(),
+    db:      AsyncSession = Depends(get_db),
+    _:       None = Depends(authenticate_token),
+):
+    return await used_product_listing_controller.get_published_used_product_listings(request, schema, db)
+
+@router.get("/{used_product_listing_id}")
+async def get_used_product_listing_by_used_product_listing_id(
+    request: Request,
+    schema:  UsedProductListingIdParam = Depends(),
+    db:      AsyncSession = Depends(get_db),
+    _:       None = Depends(authenticate_token),
+):
+    return await used_product_listing_controller.get_used_product_listing_by_used_product_listing_id(request, schema, db)
 
 
 @router.post("/{used_product_listing_id}/bookmark")
@@ -168,7 +144,6 @@ async def unbookmark_used_product_listing(
 ):
     return await used_product_listing_controller.unbookmark_used_product_listing(request, schema, db)
 
-
 @router.delete("/{used_product_listing_id}")
 async def delete_used_product_listing(
     request: Request,
@@ -177,3 +152,12 @@ async def delete_used_product_listing(
     _:       None = Depends(authenticate_token),
 ):
     return await used_product_listing_controller.delete_used_product_listing(request, schema, db)
+
+@router.get("/search-suggestions")
+async def used_product_listings_search_suggestions(
+    request: Request,
+    schema:  UsedProductListingsSearchSuggestionsSchema = Depends(),
+    db:      AsyncSession = Depends(get_db),
+    _:       None = Depends(authenticate_token),
+):
+    return await used_product_listing_controller.used_product_listings_search_suggestions(request, schema, db)

@@ -6,37 +6,92 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import func, case, literal, union_all, null
 from sqlalchemy.dialects.mysql import insert
 
-from models.users import User, UserLocation, FCMToken
-from models.chats import E2EEPublicKey, ChatInfo
-from models.services import Service, ServiceThumbnail, ServiceImage, ServicePlan 
-from models.used_product_listings import UsedProductListing, UsedProductListingImage
-from models.local_jobs import LocalJob, LocalJobImage
-from models.bookmarks import UserBookmarkService, UserBookmarkUsedProductListing, UserBookmarkLocalJob
+from models.user import User, UserLocation, FCMToken
+from models.chat import E2EEPublicKey, ChatInfo
+from models.service import Service, ServiceIndustry, ServiceLocation, ServiceThumbnail, ServiceImage, ServicePlan 
+from models.used_product_listing import UsedProductListing, UsedProductListingImage, UsedProductListingLocation
+from models.local_job import LocalJob, LocalJobImage, LocalJobLocation
+from models.bookmark import UserBookmarkService, UserBookmarkUsedProductListing, UserBookmarkLocalJob
 from config import PROFILE_BASE_URL, MEDIA_BASE_URL, BASE_URL
 
 from helpers.response_helper import send_json_response, send_error_response
 from utils.pagination.cursor import encode_cursor, decode_cursor
 
-def _parse_images(images_str) -> list:
-    if not images_str:
+def _fmt_url(base, path):
+    return f"{base}/{path}" if path else ""
+
+def _parse_thumbnail(raw):
+    if not raw:
+        return None
+    t = json.loads(raw)
+    return {
+        "thumbnail_id": t["thumbnail_id"],
+        "url":          _fmt_url(MEDIA_BASE_URL, t["url"]),
+        "width":        t["width"],
+        "height":       t["height"],
+        "size":         t["size"],
+        "format":       t["format"],
+    }
+
+def _parse_images(raw):
+    if not raw:
         return []
-    try:
-        return [
-            {**img, "image_url": f"{MEDIA_BASE_URL}/{img['image_url']}"}
-            for img in json.loads(images_str) if img
-        ]
-    except Exception:
+    return [
+        {
+            "image_id":  img["image_id"],
+            "url": _fmt_url(MEDIA_BASE_URL, img["url"]),
+            "width":     img["width"],
+            "height":    img["height"],
+            "size":      img["size"],
+            "format":    img["format"],
+        }
+        for img in json.loads(raw) if img
+    ]
+
+def _parse_plans(raw):
+    if not raw:
         return []
+    return [
+        {
+            "plan_id":       p["plan_id"],
+            "name":          p["name"],
+            "description":   p["description"],
+            "price":         float(p["price"]),
+            "price_unit":    p["price_unit"],
+            "features":      json.loads(p["features"]) if isinstance(p.get("features"), str) else p.get("features", []),
+            "delivery_time": p["delivery_time"],
+            "duration_unit": p["duration_unit"],
+        }
+        for p in json.loads(raw) if p
+    ]
 
 def _parse_location(row) -> dict | None:
     if getattr(row, "longitude", None) and getattr(row, "latitude", None):
         return {
-            "longitude":     row.longitude,
-            "latitude":      row.latitude,
-            "geo":           row.geo,
-            "location_type": row.location_type,
+            "geo":           row.geo
         }
     return None
+
+def _agg_images(ImageModel):
+    return func.coalesce(
+        func.concat(
+            "[",
+            func.group_concat(
+               func.distinct(
+                    func.json_object(
+                        "image_id", ImageModel.id,
+                        "url", ImageModel.url,
+                        "width", ImageModel.width,
+                        "height", ImageModel.height,
+                        "size", ImageModel.size,
+                        "format", ImageModel.format,
+                    )
+                ).op("ORDER BY")(ImageModel.created_at.desc()) 
+            ),
+            "]"
+        ),
+        "[]"
+    )
 
 async def update_fcm_token(request: Request, body, db: AsyncSession):
     try:
@@ -74,51 +129,35 @@ async def get_bookmarks(request: Request, params, db: AsyncSession):
 
         user_id   = request.state.user.user_id
         page_size = params.page_size
-        page_size = params.next_token 
-        page_size = params.previous_token 
+        next_token = params.next_token 
+        previous_token = params.previous_token 
 
-        svc_images = (
-            func.coalesce(
-                func.concat("[", func.group_concat(
-                    func.distinct(case(
-                        (ServiceImage.id != None, func.json_object(
-                            "image_id", ServiceImage.id,
-                            "image_url", ServiceImage.image_url,
-                            "width", ServiceImage.width,
-                            "height", ServiceImage.height,
-                            "size", ServiceImage.size,
-                            "format", ServiceImage.format,
-                        )),
-                    )).order_by(ServiceImage.created_at.desc())
-                ), "]"),
-                "[]"
-            ).label("images")
-        )
-
-        svc_plans = (
-            func.coalesce(
-                func.concat("[", func.group_concat(
-                    func.distinct(case(
-                        (ServicePlan.id != None, func.json_object(
-                            "plan_id", ServicePlan.id,
-                            "plan_name", ServicePlan.name,
-                            "plan_description", ServicePlan.description,
-                            "plan_price", ServicePlan.price,
-                            "price_unit", ServicePlan.price_unit,
-                            "plan_features", ServicePlan.features,
-                            "plan_delivery_time", ServicePlan.delivery_time,
-                            "duration_unit", ServicePlan.duration_unit,
-                        )),
-                    )).order_by(ServicePlan.created_at.asc())
-                ), "]"),
-                "[]"
-            ).label("plans")
-        )
+        svc_plans = func.coalesce(
+            func.concat(
+                "[",
+                func.group_concat(
+                    func.distinct(
+                        func.json_object(
+                                "plan_id", ServicePlan.id,
+                                "name", ServicePlan.name,
+                                "description", ServicePlan.description,
+                                "price", ServicePlan.price,
+                                "price_unit", ServicePlan.price_unit,
+                                "features", ServicePlan.features,
+                                "delivery_time", ServicePlan.delivery_time,
+                                "duration_unit", ServicePlan.duration_unit,
+                            )
+                    ).op("ORDER BY")(ServicePlan.created_at.asc()) 
+                ),
+                "]"
+            ),
+            "[]"
+        ).label("plans")
 
         svc_thumbnail = case(
-            (ServiceThumbnail.thumbnail_id != None, func.json_object(
-                "id", ServiceThumbnail.thumbnail_id,
-                "url", ServiceThumbnail.image_url,
+            (ServiceThumbnail.id.isnot(None), func.json_object(
+                "thumbnail_id", ServiceThumbnail.id,
+                "url", ServiceThumbnail.url,
                 "width", ServiceThumbnail.width,
                 "height", ServiceThumbnail.height,
                 "size", ServiceThumbnail.size,
@@ -136,14 +175,14 @@ async def get_bookmarks(request: Request, params, db: AsyncSession):
                 Service.title,
                 Service.short_description,
                 Service.long_description,
-                Industry.industry_id.label("industry"),
-                Service.status,
+                ServiceIndustry.industry_id.label("industry"),
                 Service.short_code,
                 Service.country,
                 Service.state,
-                svc_images,
+                null().label("images"),
                 svc_plans,
                 svc_thumbnail,
+
                 User.user_id.label("publisher_id"),
                 User.first_name.label("publisher_first_name"),
                 User.last_name.label("publisher_last_name"),
@@ -151,9 +190,10 @@ async def get_bookmarks(request: Request, params, db: AsyncSession):
                 User.profile_pic_url_96x96.label("publisher_profile_pic_url_96x96"),
                 User.created_at.label("publisher_created_at"),
                 ChatInfo.online.label("user_online_status"),
-                case((UserBookmarkService.service_id != None, True), else_=False).label("is_bookmarked"),
+
+                literal(True).label("is_bookmarked"),
                 UserBookmarkService.created_at.label("bookmarked_at"),
-                null().label("used_product_listing_id"),
+
                 null().label("name"),
                 null().label("description"),
                 null().label("price"),
@@ -165,39 +205,17 @@ async def get_bookmarks(request: Request, params, db: AsyncSession):
                 null().label("salary_unit"),
                 null().label("salary_min"),
                 null().label("salary_max"),
-                null().label("local_job_id"),
-                null().label("longitude"),
-                null().label("latitude"),
-                null().label("geo"),
-                null().label("location_type"),
+                ServiceLocation.geo.label("geo"),
             )
-            .outerjoin(ServiceImage, ServiceImage.service_id == Service.service_id)
-            .outerjoin(ServicePlan, ServicePlan.service_id == Service.service_id)
+            .join(ServiceIndustry, ServiceIndustry.industry_id == Service.industry)
             .outerjoin(ServiceThumbnail, ServiceThumbnail.service_id == Service.service_id)
+            .outerjoin(ServicePlan, ServicePlan.service_id == Service.service_id)
+            .outerjoin(ServiceLocation, ServiceLocation.service_id == Service.service_id)
             .join(User, User.user_id == Service.created_by)
-            .join(Industry, Industry.industry_id == Service.industry)
-            .outerjoin(UserBookmarkService, (UserBookmarkService.service_id == Service.service_id) & (UserBookmarkService.user_id == user_id))
             .outerjoin(ChatInfo, ChatInfo.user_id == User.user_id)
+            .join(UserBookmarkService, (UserBookmarkService.service_id == Service.service_id) & (UserBookmarkService.user_id == user_id))
             .where(UserBookmarkService.user_id == user_id)
             .group_by(Service.service_id)
-        )
-
-        upl_images = (
-            func.coalesce(
-                func.concat("[", func.group_concat(
-                    func.distinct(case(
-                        (UsedProductListingImage.id != None, func.json_object(
-                            "image_id", UsedProductListingImage.id,
-                            "image_url", UsedProductListingImage.image_url,
-                            "width", UsedProductListingImage.width,
-                            "height", UsedProductListingImage.height,
-                            "size", UsedProductListingImage.size,
-                            "format", UsedProductListingImage.format,
-                        )),
-                    )).order_by(UsedProductListingImage.created_at.desc())
-                ), "]"),
-                "[]"
-            ).label("images")
         )
 
         used_products_q = (
@@ -210,13 +228,13 @@ async def get_bookmarks(request: Request, params, db: AsyncSession):
                 null().label("short_description"),
                 null().label("long_description"),
                 null().label("industry"),
-                UsedProductListing.status,
                 UsedProductListing.short_code,
                 UsedProductListing.country,
                 UsedProductListing.state,
-                upl_images,
+                _agg_images(UsedProductListingImage).label("images"),
                 null().label("plans"),
                 null().label("thumbnail"),
+                
                 User.user_id.label("publisher_id"),
                 User.first_name.label("publisher_first_name"),
                 User.last_name.label("publisher_last_name"),
@@ -224,9 +242,10 @@ async def get_bookmarks(request: Request, params, db: AsyncSession):
                 User.profile_pic_url_96x96.label("publisher_profile_pic_url_96x96"),
                 User.created_at.label("publisher_created_at"),
                 ChatInfo.online.label("user_online_status"),
-                case((UserBookmarkUsedProductListing.used_product_listing_id != None, True), else_=False).label("is_bookmarked"),
+
+                literal(True).label("is_bookmarked"),
                 UserBookmarkUsedProductListing.created_at.label("bookmarked_at"),
-                UsedProductListing.used_product_listing_id.label("used_product_listing_id"),
+
                 UsedProductListing.name,
                 UsedProductListing.description,
                 UsedProductListing.price,
@@ -238,38 +257,17 @@ async def get_bookmarks(request: Request, params, db: AsyncSession):
                 null().label("salary_unit"),
                 null().label("salary_min"),
                 null().label("salary_max"),
-                null().label("local_job_id"),
-                null().label("longitude"),
-                null().label("latitude"),
-                null().label("geo"),
-                null().label("location_type"),
+                UsedProductListingLocation.geo.label("geo")
             )
             .outerjoin(UsedProductListingImage, UsedProductListingImage.used_product_listing_id == UsedProductListing.used_product_listing_id)
+            .outerjoin(UsedProductListingLocation, UsedProductListingLocation.used_product_listing_id == UsedProductListingLocation.used_product_listing_id)
             .join(User, User.user_id == UsedProductListing.created_by)
-            .outerjoin(UserBookmarkUsedProductListing, (UserBookmarkUsedProductListing.used_product_listing_id == UsedProductListing.used_product_listing_id) & (UserBookmarkUsedProductListing.user_id == user_id))
             .outerjoin(ChatInfo, ChatInfo.user_id == User.user_id)
+            .join(UserBookmarkUsedProductListing, (UserBookmarkUsedProductListing.used_product_listing_id == UsedProductListing.used_product_listing_id) & (UserBookmarkUsedProductListing.user_id == user_id))
             .where(UserBookmarkUsedProductListing.user_id == user_id)
             .group_by(UsedProductListing.used_product_listing_id)
         )
-
-        lj_images = (
-            func.coalesce(
-                func.concat("[", func.group_concat(
-                    func.distinct(case(
-                        (LocalJobImage.id != None, func.json_object(
-                            "image_id", LocalJobImage.id,
-                            "image_url", LocalJobImage.image_url,
-                            "width", LocalJobImage.width,
-                            "height", LocalJobImage.height,
-                            "size", LocalJobImage.size,
-                            "format", LocalJobImage.format,
-                        )),
-                    )).order_by(LocalJobImage.created_at.desc())
-                ), "]"),
-                "[]"
-            ).label("images")
-        )
-
+        
         local_jobs_q = (
             select(
                 literal("local_job").label("type"),
@@ -280,13 +278,13 @@ async def get_bookmarks(request: Request, params, db: AsyncSession):
                 null().label("short_description"),
                 null().label("long_description"),
                 null().label("industry"),
-                LocalJob.status,
                 LocalJob.short_code,
                 LocalJob.country,
                 LocalJob.state,
-                lj_images,
+                _agg_images(LocalJobImage).label("images"),
                 null().label("plans"),
                 null().label("thumbnail"),
+
                 User.user_id.label("publisher_id"),
                 User.first_name.label("publisher_first_name"),
                 User.last_name.label("publisher_last_name"),
@@ -294,9 +292,10 @@ async def get_bookmarks(request: Request, params, db: AsyncSession):
                 User.profile_pic_url_96x96.label("publisher_profile_pic_url_96x96"),
                 User.created_at.label("publisher_created_at"),
                 ChatInfo.online.label("user_online_status"),
-                case((UserBookmarkLocalJob.local_job_id != None, True), else_=False).label("is_bookmarked"),
+                
+                literal(True).label("is_bookmarked"),
                 UserBookmarkLocalJob.created_at.label("bookmarked_at"),
-                null().label("used_product_listing_id"),
+                
                 null().label("name"),
                 LocalJob.description,
                 null().label("price"),
@@ -308,13 +307,10 @@ async def get_bookmarks(request: Request, params, db: AsyncSession):
                 LocalJob.salary_unit,
                 LocalJob.salary_min,
                 LocalJob.salary_max,
-                LocalJob.local_job_id.label("local_job_id"),
-                null().label("longitude"),
-                null().label("latitude"),
-                null().label("geo"),
-                null().label("location_type"),
+                LocalJobLocation.geo.label("geo"),
             )
             .outerjoin(LocalJobImage, LocalJobImage.local_job_id == LocalJob.local_job_id)
+            .outerjoin(LocalJobLocation, LocalJobLocation.local_job_id == LocalJob.local_job_id)
             .join(User, User.user_id == LocalJob.created_by)
             .outerjoin(UserBookmarkLocalJob, (UserBookmarkLocalJob.local_job_id == LocalJob.local_job_id) & (UserBookmarkLocalJob.user_id == user_id))
             .outerjoin(ChatInfo, ChatInfo.user_id == User.user_id)
@@ -363,18 +359,14 @@ async def get_bookmarks(request: Request, params, db: AsyncSession):
 
             if item_key not in items:
                 if row.type == "service":
-                    thumbnail = None
-                    if row.thumbnail:
-                        t = json.loads(row.thumbnail)
-                        t["url"] = f"{MEDIA_BASE_URL}/{t['url']}"
-                        thumbnail = t
-                    plans = []
-                    if row.plans:
-                        for plan in json.loads(row.plans):
-                            if plan:
-                                if isinstance(plan.get("plan_features"), str):
-                                    plan["plan_features"] = json.loads(plan["plan_features"])
-                                plans.append(plan)
+                    thumbnail = _parse_thumbnail(row.thumbnail)
+                    plans = _parse_plans(row.plans)
+                    min_plan = min(plans, key=lambda p: p["price"]) if plans else None
+                    starting_from = {
+                        "price":      float(min_plan["price"]),
+                        "price_unit": min_plan["price_unit"],
+                    } if plans else None
+                    
                     items[item_key] = {
                         "type": "service",
                         "user": publisher,
@@ -382,15 +374,10 @@ async def get_bookmarks(request: Request, params, db: AsyncSession):
                             "service_id":        row.item_id,
                             "title":             row.title,
                             "short_description": row.short_description,
-                            "long_description":  row.long_description,
                             "industry":          row.industry,
-                            "country":           row.country,
-                            "state":             row.state,
-                            "status":            row.status,
                             "slug":              f"{BASE_URL}/service/{row.short_code}",
                             "is_bookmarked":     bool(row.is_bookmarked),
-                            "images":            _parse_images(row.images),
-                            "plans":             plans,
+                            "starting_from":     starting_from,
                             "thumbnail":         thumbnail,
                             "location":          _parse_location(row),
                         },
@@ -403,11 +390,8 @@ async def get_bookmarks(request: Request, params, db: AsyncSession):
                             "used_product_listing_id": row.item_id,
                             "name":          row.name,
                             "description":   row.description,
-                            "price":         row.price,
+                            "price":         float(row.price),
                             "price_unit":    row.price_unit,
-                            "country":       row.country,
-                            "state":         row.state,
-                            "status":        row.status,
                             "slug":          f"{BASE_URL}/used-product/{row.short_code}",
                             "is_bookmarked": bool(row.is_bookmarked),
                             "images":        _parse_images(row.images),
@@ -422,16 +406,9 @@ async def get_bookmarks(request: Request, params, db: AsyncSession):
                             "local_job_id":      row.item_id,
                             "title":             row.title,
                             "description":       row.description,
-                            "company":           row.company,
-                            "age_min":           row.age_min,
-                            "age_max":           row.age_max,
-                            "marital_statuses":  json.loads(row.marital_statuses) if row.marital_statuses else [],
                             "salary_unit":       row.salary_unit,
                             "salary_min":        row.salary_min,
                             "salary_max":        row.salary_max,
-                            "country":           row.country,
-                            "state":             row.state,
-                            "status":            row.status,
                             "slug":              f"{BASE_URL}/local-job/{row.short_code}",
                             "is_bookmarked":     bool(row.is_bookmarked),
                             "images":            _parse_images(row.images),
@@ -457,6 +434,10 @@ async def get_bookmarks(request: Request, params, db: AsyncSession):
             "previous_token": prev_token_out,
         })
     except Exception:
+        import traceback
+        import sys
+        traceback.print_exc(file=sys.stderr)
+        sys.stderr.flush()
         return send_error_response(request, 500, "Internal server error")
 
 async def sync_contacts(request: Request, body, db: AsyncSession):

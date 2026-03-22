@@ -1,4 +1,5 @@
-from pydantic import BaseModel, field_validator, model_validator
+from fastapi.exceptions import RequestValidationError
+from pydantic import BaseModel, ValidationError, field_validator, model_validator
 from typing import Annotated, Optional, List, Literal
 from fastapi import Form, UploadFile , File
 import json
@@ -50,7 +51,6 @@ class GuestGetUsedProductListingsSchema(BaseModel):
             raise ValueError("Page size must be a positive integer")
         return v
 
-
 class GetUsedProductListingsSchema(BaseModel):
     s:              Optional[str] = None
     page_size:      Optional[int] = None
@@ -71,20 +71,16 @@ class GetUsedProductListingsSchema(BaseModel):
             raise ValueError("Page size must be a positive integer")
         return v
 
+class UsedProductListingIdParam(BaseModel):
+    used_product_listing_id: int
 
-class GetUsedProductListingsByUserIdSchema(BaseModel):
-    page_size:      Optional[int] = None
-    next_token:     Optional[str] = None
-    previous_token: Optional[str] = None
-
-    @field_validator("page_size")
-    def validate_page_size(cls, v):
-        if v is not None and v <= 0:
-            raise ValueError("Page size must be a positive integer")
+    @field_validator("used_product_listing_id")
+    def validate_id(cls, v):
+        if v <= 0:
+            raise ValueError("Invalid used product listing id")
         return v
-
-
-class GetUserProfileSchema(BaseModel):
+    
+class GetUserProfileUsedProductListingsSchema(BaseModel):
     user_id: int
     page_size: Optional[int] = None
 
@@ -100,8 +96,7 @@ class GetUserProfileSchema(BaseModel):
             raise ValueError("Page size must be a positive integer")
         return v
 
-
-class GetMeUsedProductListingsSchema(BaseModel):
+class GetUsedProductListingsByUserIdSchema(BaseModel):
     page_size:      Optional[int] = None
     next_token:     Optional[str] = None
     previous_token: Optional[str] = None
@@ -112,37 +107,16 @@ class GetMeUsedProductListingsSchema(BaseModel):
             raise ValueError("Page size must be a positive integer")
         return v
 
+class GetPublishedUsedProductListingsSchema(BaseModel):
+    page_size:      Optional[int] = None
+    next_token:     Optional[str] = None
+    previous_token: Optional[str] = None
 
-class UsedProductSearchSuggestionsSchema(BaseModel):
-    query: str
-
-    @field_validator("query")
-    def validate_query(cls, v):
-        v = v.strip()
-        if not v:
-            raise ValueError("Search query cannot be empty")
+    @field_validator("page_size")
+    def validate_page_size(cls, v):
+        if v is not None and v <= 0:
+            raise ValueError("Page size must be a positive integer")
         return v
-
-
-class UsedProductListingIdParam(BaseModel):
-    used_product_listing_id: int
-
-    @field_validator("used_product_listing_id")
-    def validate_id(cls, v):
-        if v <= 0:
-            raise ValueError("Invalid used product listing id")
-        return v
-
-
-class UserIdParam(BaseModel):
-    user_id: int
-
-    @field_validator("user_id")
-    def validate_user_id(cls, v):
-        if v <= 0:
-            raise ValueError("Invalid user id")
-        return v
-
 
 class CreateOrUpdateUsedProductListingSchema(BaseModel):
     used_product_listing_id: int
@@ -233,7 +207,6 @@ class CreateOrUpdateUsedProductListingSchema(BaseModel):
                     raise ValueError(f"Image {image.filename} must be under 1MB")
         return self
 
-
 async def create_or_update_used_product_listing_form(
     used_product_listing_id: int                  = Form(...),
     name:                    str                  = Form(...),
@@ -246,15 +219,28 @@ async def create_or_update_used_product_listing_form(
     keep_image_ids:          Optional[List[int]]  = Form(default=None),
     images:           Annotated[Optional[List[UploadFile]], File()] = None,
 ) -> CreateOrUpdateUsedProductListingSchema:
-    return CreateOrUpdateUsedProductListingSchema(
-        used_product_listing_id = used_product_listing_id,
-        name                    = name,
-        description             = description,
-        country                 = country,
-        state                   = state,
-        price                   = price,
-        price_unit              = price_unit,
-        location                = location,
-        keep_image_ids          = keep_image_ids,
-        images                  = images
-    )
+    try:
+        return CreateOrUpdateUsedProductListingSchema(
+            used_product_listing_id = used_product_listing_id,
+            name                    = name,
+            description             = description,
+            country                 = country,
+            state                   = state,
+            price                   = price,
+            price_unit              = price_unit,
+            location                = location,
+            keep_image_ids          = keep_image_ids,
+            images                  = images
+        )
+    except ValidationError as e:
+        raise RequestValidationError(e.errors()) 
+    
+class UsedProductListingsSearchSuggestionsSchema(BaseModel):
+    query: str
+
+    @field_validator("query")
+    def validate_query(cls, v):
+        v = v.strip()
+        if not v:
+            raise ValueError("Query cannot be empty")
+        return v

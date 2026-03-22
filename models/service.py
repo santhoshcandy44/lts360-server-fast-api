@@ -75,7 +75,7 @@ class ServiceImage(SQLModel, table=True):
 
     id:         Optional[int] = Field(primary_key=True)
     service_id: int           = Field(sa_column=Column(BigInteger, ForeignKey("services.service_id", ondelete="CASCADE"), nullable=False, index=True))
-    image_url:  str           = Field()
+    url:        str           = Field()
     width:      int           = Field()
     height:     int           = Field()
     size:       int           = Field()
@@ -136,7 +136,7 @@ class ServiceThumbnail(SQLModel, table=True):
  
     id: Optional[int] = Field(primary_key=True)
     service_id:   int           = Field(sa_column=Column(BigInteger, ForeignKey("services.service_id", ondelete="CASCADE"), unique=True, nullable=False))
-    image_url:    str           = Field()
+    url:    str           = Field()
     width:        int           = Field()
     height:       int           = Field()
     size:         int           = Field()

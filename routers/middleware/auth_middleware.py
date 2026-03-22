@@ -4,7 +4,7 @@ from jose import jwt, JWTError
 from jose.exceptions import JWTClaimsError
 
 from database import get_db
-from models.users import User
+from models.user import User
 
 from fastapi import Depends, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials

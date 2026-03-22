@@ -7,7 +7,7 @@ from sqlalchemy.dialects.mysql import insert
 from sqlalchemy.orm import selectinload
 
 from models.common import Board
-from models.users import UserBoard
+from models.user import UserBoard
 from helpers.response_helper import send_json_response, send_error_response
 
 async def create_default_boards_for_user(user_id: int, db: AsyncSession):

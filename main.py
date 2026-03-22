@@ -7,13 +7,13 @@ from fastapi.exceptions import RequestValidationError
 from helpers.response_helper import AppException, send_error_response
 from routers import (
     auth,
-    account,
     app as app_module,
     board,
     profile,
-    local_jobs,
-    services,
+    account,
+    service,
     used_product_listing,
+    local_job
 )
 
 @asynccontextmanager
@@ -54,8 +54,8 @@ app.include_router(app_module.router,           prefix="/api/v1")
 app.include_router(board.router,        prefix="/api/v1")
 app.include_router(profile.router,       prefix="/api/v1")
 app.include_router(account.router,       prefix="/api/v1")
-app.include_router(services.router,      prefix="/api/v1")
-app.include_router(local_jobs.router,    prefix="/api/v1")
+app.include_router(service.router,      prefix="/api/v1")
+app.include_router(local_job.router,    prefix="/api/v1")
 app.include_router(used_product_listing.router, prefix="/api/v1")
 
 @app.get("/", tags=["Health"])

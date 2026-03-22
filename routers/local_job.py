@@ -1,7 +1,7 @@
 from database import get_db
 from .middleware.auth_middleware import authenticate_token
 
-from fastapi import APIRouter, Depends, Request, Path, Form
+from fastapi import APIRouter, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from schemas.local_job_schemas import (
@@ -61,24 +61,6 @@ async def get_local_jobs(
 ):
     return await local_job_controller.get_local_jobs(request, schema, db)
 
-@router.get("/{local_job_id}")                   
-async def get_local_job(
-    request:      Request,
-    schema:       LocalJobIdSchema = Depends(),
-    db:           AsyncSession = Depends(get_db),
-    _:            None = Depends(authenticate_token),
-):
-    return await local_job_controller.get_local_job(request, schema, db)
-
-@router.post("/{local_job_id}/apply")
-async def apply_local_job(
-    request: Request,
-    schema:  LocalJobIdSchema = Depends(),
-    db:      AsyncSession = Depends(get_db),
-    _:       None = Depends(authenticate_token),
-):
-    return await local_job_controller.apply_local_job(request, schema, db)
-
 @router.post("")
 async def create_or_update_local_job(
     request: Request,
@@ -96,6 +78,24 @@ async def get_publishd_local_jobs(
     _:       None = Depends(authenticate_token),
 ):
     return await local_job_controller.get_published_local_jobs(request, schema, db)
+
+@router.get("/{local_job_id}")                   
+async def get_local_job(
+    request:      Request,
+    schema:       LocalJobIdSchema = Depends(),
+    db:           AsyncSession = Depends(get_db),
+    _:            None = Depends(authenticate_token),
+):
+    return await local_job_controller.get_local_job(request, schema, db)
+
+@router.post("/{local_job_id}/apply")
+async def apply_local_job(
+    request: Request,
+    schema:  LocalJobIdSchema = Depends(),
+    db:      AsyncSession = Depends(get_db),
+    _:       None = Depends(authenticate_token),
+):
+    return await local_job_controller.apply_local_job(request, schema, db)
 
 @router.delete("/{local_job_id}")
 async def delete_local_job(

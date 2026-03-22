@@ -54,7 +54,7 @@ class SyncContactsRequest(BaseModel):
         return v
 
 
-class GetBookmarksRequest(BaseModel):
+class GetBookmarksSchema(BaseModel):
     page_size:      Optional[int] = 20
     next_token:     Optional[str] = None
     previous_token: Optional[str] = None

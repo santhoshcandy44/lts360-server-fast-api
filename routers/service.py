@@ -96,15 +96,6 @@ async def get_services(
 ):
     return await service_controller.get_services(request, schema, db)
 
-@router.get("/{service_id}")
-async def get_service_by_service_id(
-    request: Request,
-    schema:  ServiceIdSchema = Depends(),
-    db:      AsyncSession = Depends(get_db),
-    _:       None = Depends(authenticate_token),
-):
-    return await service_controller.get_service_by_service_id(request, schema, db)
-
 @router.get("/users/profile/{user_id}")
 async def get_user_profile_and_services_by_user_id(
     request: Request,
@@ -140,6 +131,15 @@ async def get_me_services(
     _:       None = Depends(authenticate_token),
 ):
     return await service_controller.get_published_services(request, schema, db)
+
+@router.get("/{service_id}")
+async def get_service_by_service_id(
+    request: Request,
+    schema:  ServiceIdSchema = Depends(),
+    db:      AsyncSession = Depends(get_db),
+    _:       None = Depends(authenticate_token),
+):
+    return await service_controller.get_service_by_service_id(request, schema, db)
 
 @router.patch("/{service_id}/info")
 async def update_service_info(

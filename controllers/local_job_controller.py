@@ -26,12 +26,12 @@ from sqlalchemy import or_, and_, update, func, exists
 from sqlalchemy.dialects.mysql import insert, match
 from sqlalchemy.orm import selectinload
 
-from models.local_jobs import LocalJobSearchQuery
-from models.local_jobs import LocalJob, LocalJobImage, LocalJobLocation, LocalJobApplicant, LocalJobSearchQuery
-from models.users import User
-from models.chats import ChatInfo
-from models.users import UserLocation
-from models.bookmarks import UserBookmarkLocalJob
+from models.local_job import LocalJobSearchQuery
+from models.local_job import LocalJob, LocalJobImage, LocalJobLocation, LocalJobApplicant, LocalJobSearchQuery
+from models.user import User
+from models.chat import ChatInfo
+from models.user import UserLocation
+from models.bookmark import UserBookmarkLocalJob
 
 from config import BASE_URL, PROFILE_BASE_URL, MEDIA_BASE_URL
 from helpers.response_helper import send_json_response, send_error_response
@@ -40,7 +40,7 @@ from utils.aws_s3 import upload_to_s3, delete_from_s3, delete_directory_from_s3
 # from kafka.notification_service_producer import send_local_job_applicant_applied_notification_to_kafka
 
 def _fmt_url(base, path):
-    return f"{base}/{path}" if path else None
+    return f"{base}/{path}" if path else ""
 
 def _user_local_job_summary_response(
     local_job:          LocalJob,
@@ -73,7 +73,7 @@ def _user_local_job_summary_response(
             "images": [
                 {
                     "image_id":  img.id,
-                    "image_url": _fmt_url(MEDIA_BASE_URL, img.image_url),
+                    "url": _fmt_url(MEDIA_BASE_URL, img.url),
                     "width":     img.width,
                     "height":    img.height,
                     "size":      img.size,
@@ -124,7 +124,7 @@ def _local_job_detail_response(
             "images": [
                 {
                     "image_id":  img.id,
-                    "image_url": _fmt_url(MEDIA_BASE_URL, img.image_url),
+                    "url": _fmt_url(MEDIA_BASE_URL, img.url),
                     "width":     img.width,
                     "height":    img.height,
                     "size":      img.size,
@@ -159,7 +159,7 @@ def _published_local_job_response(
             "images": [
                 {
                     "image_id":  img.id,
-                    "image_url": _fmt_url(MEDIA_BASE_URL, img.image_url),
+                    "url": _fmt_url(MEDIA_BASE_URL, img.url),
                     "width":     img.width,
                     "height":    img.height,
                     "size":      img.size,
@@ -400,10 +400,6 @@ async def get_local_jobs(request: Request, schema: GetLocalJobsbSchema, db: Asyn
         data = await _query_local_jobs(db=db, user_id=user_id, page_size=page_size, query=s, user_lat=lat, user_lon=lon, next_token=next_token)
         return send_json_response(200, "Local jobs fetched", data= data)
     except Exception:
-        import traceback
-        import sys
-        traceback.print_exc(file=sys.stderr)
-        sys.stderr.flush()
         return send_error_response(request, 500, "Internal server error")
 
 async def get_local_job(request: Request, schema: LocalJobIdSchema, db: AsyncSession):
@@ -433,10 +429,6 @@ async def get_local_job(request: Request, schema: LocalJobIdSchema, db: AsyncSes
             is_applied=bool(is_applied),
         ))
     except Exception:
-        import traceback
-        import sys
-        traceback.print_exc(file=sys.stderr)
-        sys.stderr.flush()
         return send_error_response(request, 500, "Internal server error")
 
 async def apply_local_job(request: Request, schema: LocalJobIdSchema, db: AsyncSession):
@@ -533,7 +525,7 @@ async def create_or_update_local_job(
         keep_ids   = set(schema.keep_image_ids or [])
         for img in old_images:
             if img.id not in keep_ids:
-                deleted_keys.append(img.image_url) 
+                deleted_keys.append(img.url) 
                 await db.delete(img)
 
         for image in images:
@@ -547,7 +539,7 @@ async def create_or_update_local_job(
  
             db.add(LocalJobImage(
                 local_job_id = local_job.local_job_id,
-                image_url    = key,
+                url    = key,
                 width        = width,
                 height       = height,
                 size         = len(contents),
@@ -616,7 +608,7 @@ async def get_published_local_jobs(
 
     localJobs = (await db.execute(q)).scalars().all()
 
-    items = [_published_local_job_response(local_job, local_job.images, local_job.location) for local_job in localJobs]
+    items = [_published_local_job_response(local_job) for local_job in localJobs]
     last_row = localJobs[-1] if localJobs else None
 
     return send_json_response(

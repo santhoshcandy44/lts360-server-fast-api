@@ -71,7 +71,7 @@ class LocalJobImage(SQLModel, table=True):
  
     id:           Optional[int] = Field(primary_key=True)
     local_job_id: int           = Field(sa_column=Column(BigInteger, ForeignKey("local_jobs.local_job_id", ondelete="CASCADE"), nullable=False))
-    image_url:    str           = Field()
+    url:          str           = Field()
     width:        int           = Field()
     height:       int           = Field()
     size:         int           = Field()

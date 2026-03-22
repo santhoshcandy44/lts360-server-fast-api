@@ -4,18 +4,30 @@ from datetime import datetime, timezone
 from PIL import Image
 
 from fastapi import Request
-from schemas.used_product_listing_schemas import CreateOrUpdateUsedProductListingSchema, GetMeUsedProductListingsSchema, GetUsedProductListingsByUserIdSchema, GetUsedProductListingsSchema, GetUserProfileSchema, GuestGetUsedProductListingsSchema, UsedProductListingIdParam, UsedProductSearchSuggestionsSchema
+
+from schemas.used_product_listing_schemas import (
+    GuestGetUsedProductListingsSchema,
+
+    GetUsedProductListingsSchema,
+    UsedProductListingIdParam,
+    GetUserProfileUsedProductListingsSchema,
+    GetUsedProductListingsByUserIdSchema,
+    GetPublishedUsedProductListingsSchema,
+    CreateOrUpdateUsedProductListingSchema,
+
+    UsedProductListingsSearchSuggestionsSchema
+)
 
 from sqlmodel import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import func, or_, and_
+from sqlalchemy import func, or_, and_, exists
 from sqlalchemy.dialects.mysql import insert, match
 from sqlalchemy.orm import selectinload
 
-from models.used_product_listings import UsedProductListing, UsedProductListingImage, UsedProductListingLocation, UsedProductListingSearchQuery
-from models.users import User, UserLocation
-from models.chats import ChatInfo
-from models.bookmarks import UserBookmarkUsedProductListing
+from models.used_product_listing import UsedProductListing, UsedProductListingImage, UsedProductListingLocation, UsedProductListingSearchQuery
+from models.user import User, UserLocation
+from models.chat import ChatInfo
+from models.bookmark import UserBookmarkUsedProductListing
 
 from config import PROFILE_BASE_URL, MEDIA_BASE_URL, BASE_URL
 from helpers.response_helper import send_json_response, send_error_response
@@ -23,77 +35,65 @@ from utils.pagination.cursor import encode_cursor, decode_cursor
 from utils.aws_s3 import upload_to_s3, delete_from_s3, delete_directory_from_s3
 
 def _fmt_url(base, path):
-    return f"{base}/{path}" if path else None
+    return f"{base}/{path}" if path else ""
 
-def _used_product_listing_user_summary_response(
-    product:  UsedProductListing,
-    images:   list[UsedProductListingImage],
-    location: UsedProductListingLocation,
-    owner:        User,
-    chat:         ChatInfo | None =  None,
+def _user_used_product_listing_summary_response(
+    used_product_listing:  UsedProductListing,
     is_bookmarked: bool = False,
     distance:     float | None = None,
 ) -> dict:
     return {
          "user": {
-            "user_id":               owner.user_id,
-            "first_name":            owner.first_name,
-            "last_name":             owner.last_name,
-            "is_verified":           bool(owner.is_email_verified),
-            "profile_pic_url":       _fmt_url(PROFILE_BASE_URL, owner.profile_pic_url),
-            "profile_pic_url_small": _fmt_url(PROFILE_BASE_URL, owner.profile_pic_url_96x96),
-            "online":                bool(chat.online) if chat else False,
-            "joined_at":             str(owner.created_at.year) if owner.created_at else None,
+            "user_id":               used_product_listing.owner.user_id,
+            "first_name":            used_product_listing.owner.first_name,
+            "last_name":             used_product_listing.owner.last_name,
+            "is_verified":           bool(used_product_listing.owner.is_email_verified),
+            "profile_pic_url":       _fmt_url(PROFILE_BASE_URL, used_product_listing.owner.profile_pic_url),
+            "profile_pic_url_small": _fmt_url(PROFILE_BASE_URL, used_product_listing.owner.profile_pic_url_96x96),
+            "online":                bool(used_product_listing.owner.chat_info.online) if used_product_listing.owner.chat_info else False,
+            "joined_at":             str(used_product_listing.owner.created_at.year) if used_product_listing.owner.created_at else None,
         },
         "used_product_listing": {
-            "used_product_listing_id": product.used_product_listing_id,
-            "name":                    product.name,
-            "description":             product.description,
-            "price":                   float(product.price),
-            "price_unit":              product.price_unit,
-            "country":                 product.country,
-            "state":                   product.state,
-            "status":                  product.status,
-            "slug":                    f"{BASE_URL}/used-product/{product.short_code}",
+            "used_product_listing_id": used_product_listing.used_product_listing_id,
+            "name":                    used_product_listing.name,
+            "description":             used_product_listing.description,
+            "price":                   float(used_product_listing.price),
+            "price_unit":              used_product_listing.price_unit,
+            "slug":                    f"{BASE_URL}/used-used_product_listing/{used_product_listing.short_code}",
             "is_bookmarked":   is_bookmarked,
             "distance":        distance,
             "images": [
                 {
                     "image_id":  img.id,
-                    "image_url": _fmt_url(MEDIA_BASE_URL, img.image_url),
+                    "url": _fmt_url(MEDIA_BASE_URL, img.url),
                     "width":     img.width,
                     "height":    img.height,
                     "size":      img.size,
                     "format":    img.format,
                 }
-                for img in sorted(images, key=lambda x: x.created_at, reverse=True)
+                for img in sorted(used_product_listing.images, key=lambda x: x.created_at, reverse=True)
             ],
             "location": {
-                "longitude":     float(location.longitude),
-                "latitude":      float(location.latitude),
-                "geo":           location.geo,
-                "location_type": location.location_type,
-            } if location else None,
+                "geo":           used_product_listing.location.geo,
+            } if used_product_listing.location else None,
         }
     }
 
 def _used_product_listing_detail_response(
     used_product_listing:  UsedProductListing,
-    images:   list[UsedProductListingImage],
-    location: UsedProductListingLocation,
-    owner:        User,
-    chat:         ChatInfo | None =  None
+    is_bookmarked: bool = False,
+    distance:     float | None = None,
 ) -> dict:
     return {
         "user": {
-            "user_id":               owner.user_id,
-            "first_name":            owner.first_name,
-            "last_name":             owner.last_name,
-            "is_verified":           bool(owner.is_email_verified),
-            "profile_pic_url":       _fmt_url(PROFILE_BASE_URL, owner.profile_pic_url),
-            "profile_pic_url_small": _fmt_url(PROFILE_BASE_URL, owner.profile_pic_url_96x96),
-            "online":                bool(chat.online) if chat else False,
-            "joined_at":             str(owner.created_at.year) if owner.created_at else None,
+            "user_id":               used_product_listing.owner.user_id,
+            "first_name":            used_product_listing.owner.first_name,
+            "last_name":             used_product_listing.owner.last_name,
+            "is_verified":           bool(used_product_listing.owner.is_email_verified),
+            "profile_pic_url":       _fmt_url(PROFILE_BASE_URL, used_product_listing.owner.profile_pic_url),
+            "profile_pic_url_small": _fmt_url(PROFILE_BASE_URL, used_product_listing.owner.profile_pic_url_96x96),
+            "online":                bool(used_product_listing.owner.chat_info.online) if used_product_listing.owner.chat_info else False,
+            "joined_at":             str(used_product_listing.owner.created_at.year) if used_product_listing.owner.created_at else None,
         },
         "used_product_listing": {
                 "used_product_listing_id": used_product_listing.used_product_listing_id,
@@ -103,12 +103,13 @@ def _used_product_listing_detail_response(
                 "price_unit":              used_product_listing.price_unit,
                 "country":                 used_product_listing.country,
                 "state":                   used_product_listing.state,
-                "status":                  used_product_listing.status,
-                "slug":                    f"{BASE_URL}/used-product/{used_product_listing.short_code}",
+                "slug":                    f"{BASE_URL}/used-used_product_listing/{used_product_listing.short_code}",
+                "is_bookmarked":   is_bookmarked,
+                "distance":        distance,
                 "images": [
                     {
                         "image_id":  img.id,
-                        "image_url": _fmt_url(MEDIA_BASE_URL, img.image_url),
+                        "url": _fmt_url(MEDIA_BASE_URL, img.url),
                         "width":     img.width,
                         "height":    img.height,
                         "size":      img.size,
@@ -117,37 +118,32 @@ def _used_product_listing_detail_response(
                     for img in sorted(images, key=lambda x: x.created_at, reverse=True)
                 ],
                 "location": {
-                    "longitude":     float(location.longitude),
-                    "latitude":      float(location.latitude),
-                    "geo":           location.geo,
-                    "location_type": location.location_type,
-                } if location else None
+                    "geo":           used_product_listing.location.geo,
+                } if used_product_listing.location else None
         }
     }
 
 def _used_product_listing_summary_response(
-    product:  UsedProductListing,
-    images:   list[UsedProductListingImage],
-    location: UsedProductListingLocation,
+    used_product_listing:  UsedProductListing,
     is_bookmarked: bool = False,
     distance:     float | None = None,
 ) -> dict:
     return {
-                "used_product_listing_id": product.used_product_listing_id,
-                "name":                    product.name,
-                "description":             product.description,
-                "price":                   float(product.price),
-                "price_unit":              product.price_unit,
-                "country":                 product.country,
-                "state":                   product.state,
-                "status":                  product.status,
-                "slug":                    f"{BASE_URL}/used-product/{product.short_code}",
+                "used_product_listing_id": used_product_listing.used_product_listing_id,
+                "name":                    used_product_listing.name,
+                "description":             used_product_listing.description,
+                "price":                   float(used_product_listing.price),
+                "price_unit":              used_product_listing.price_unit,
+                "country":                 used_product_listing.country,
+                "state":                   used_product_listing.state,
+                "status":                  used_product_listing.status,
+                "slug":                    f"{BASE_URL}/used-used_product_listing/{used_product_listing.short_code}",
                 "is_bookmarked":   is_bookmarked,
                 "distance":        distance,
                 "images": [
                     {
                         "image_id":  img.id,
-                        "image_url": _fmt_url(MEDIA_BASE_URL, img.image_url),
+                        "url": _fmt_url(MEDIA_BASE_URL, img.url),
                         "width":     img.width,
                         "height":    img.height,
                         "size":      img.size,
@@ -177,11 +173,11 @@ def _published_used_product_listing_response(
         "country":                 used_product_listing.country,
         "state":                   used_product_listing.state,
         "status":                  used_product_listing.status,
-        "slug":                    f"{BASE_URL}/used-product/{used_product_listing.short_code}",
+        "slug":                    f"{BASE_URL}/used-used_product_listing/{used_product_listing.short_code}",
         "images": [
             {
                 "image_id":  img.id,
-                "image_url": _fmt_url(MEDIA_BASE_URL, img.image_url),
+                "url": _fmt_url(MEDIA_BASE_URL, img.url),
                 "width":     img.width,
                 "height":    img.height,
                 "size":      img.size,
@@ -282,10 +278,11 @@ async def _query_used_product_listings(
     cols = [UsedProductListing]
 
     bookmark_subq = (
-        select(UserBookmarkUsedProductListing.used_product_listing_id)
-        .where(UserBookmarkUsedProductListing.user_id == user_id)
-        .correlate(UsedProductListing)
-        .scalar_subquery()
+        exists()
+        .where(
+            UserBookmarkUsedProductListing.used_product_listing_id == UsedProductListing.used_product_listing_id,
+            UserBookmarkUsedProductListing.user_id == user_id
+        )
     ).label("is_bookmarked")
 
     if has_loc:
@@ -380,12 +377,8 @@ async def _query_used_product_listings(
     last_row = rows[-1] if rows else None
 
     jobs = [
-    _used_product_listing_user_summary_response(
+    _user_used_product_listing_summary_response(
         row.UsedProductListing,
-        row.UsedProductListing.images,
-        row.UsedProductListing.location,
-        row.UsedProductListing.owner,         
-        row.UsedProductListing.owner.chat_info, 
         bool(row.is_bookmarked) if user_id else False,
         float(row.distance)     if has_loc else None
     )
@@ -403,7 +396,7 @@ async def _query_used_product_listings(
 async def guest_get_used_product_listings(request: Request, schema: GuestGetUsedProductListingsSchema, db: AsyncSession):
     try:
         s = schema.s
-        page_size = 1
+        page_size = schema.page_size
         next_token = schema.next_token
         
         lat = schema.latitude
@@ -417,7 +410,7 @@ async def guest_get_used_product_listings(request: Request, schema: GuestGetUsed
 async def get_used_product_listings(request: Request, schema: GetUsedProductListingsSchema, db: AsyncSession):
     try:
         s = schema.s
-        page_size = 1
+        page_size = schema.page_size
         next_token = schema.next_token
         
         user_id = request.state.user.user_id    
@@ -430,7 +423,7 @@ async def get_used_product_listings(request: Request, schema: GetUsedProductList
     except Exception:
         return send_error_response(request, 500, "Internal server error")    
 
-async def get_used_product_listing_by_user_id(request: Request, schema: UsedProductListingIdParam, db: AsyncSession):
+async def get_used_product_listing_by_used_product_listing_id(request: Request, schema: UsedProductListingIdParam, db: AsyncSession):
     try:
         used_product_listing = await db.scalar(
             select(UsedProductListing)
@@ -444,34 +437,35 @@ async def get_used_product_listing_by_user_id(request: Request, schema: UsedProd
 
         if not used_product_listing:
             return send_error_response(request, 404, "Used product listing not exist")
-        data=_used_product_listing_response(
-            used_product_listing=used_product_listing,
-            images=used_product_listing.images,
-            location=used_product_listing.location,
-            owner=used_product_listing.owner,
-            chat=used_product_listing.owner.chat_info
-            )
+        data=_used_product_listing_detail_response(used_product_listing)
          
         data["contact_info"] = {
             "phone_country_code": used_product_listing.owner.phone_country_code,
             "phone_number":       used_product_listing.owner.phone_number,
         }
-    
         return send_json_response(200, "Used product listing job retrived", data = data)
     except Exception:
         return send_error_response(request, 500, "Internal server error")
 
-async def get_profile_and_used_product_listings(
+async def get_user_profile_and_used_product_listings(
     request: Request,
-    schema: GetUserProfileSchema,
+    schema: GetUserProfileUsedProductListingsSchema,
     db: AsyncSession,
 ): 
     try:
         user_id = request.state.user.user_id
-        page_size = 1
+        page_size = schema.page_size
+        
+        bookmark_subq = (
+            exists()
+            .where(
+                UserBookmarkUsedProductListing.used_product_listing_id == UsedProductListing.used_product_listing_id,
+                UserBookmarkUsedProductListing.user_id == user_id
+            )
+        ).label("is_bookmarked")
         
         q = (
-            select(UsedProductListing)
+            select(UsedProductListing, bookmark_subq)
             .where(UsedProductListing.created_by == user_id)
             .options(
                 selectinload(UsedProductListing.images),      
@@ -482,12 +476,12 @@ async def get_profile_and_used_product_listings(
 
         q = q.order_by(UsedProductListing.created_at.desc(), UsedProductListing.id.asc()).limit(page_size)
 
-        products = (await db.execute(q)).scalars().all()
+        usedProductListings = (await db.execute(q)).all()
 
-        owner = products[0].owner if products else None
+        owner = usedProductListings[0].UsedProductListing if usedProductListings else None
         chat  = owner.chat_info if owner else None
 
-        items = [_used_product_listing_summary_response(product, product.images, product.location) for product in products]
+        items = [_used_product_listing_summary_response(used_product_listing) for used_product_listing in usedProductListings]
 
         data = {
             "user": {
@@ -502,11 +496,11 @@ async def get_profile_and_used_product_listings(
             },
             "used_product_listings": items,
         }
-        last_row = products[-1] if products else None   
+        last_row = usedProductListings[-1] if usedProductListings else None   
         return send_json_response(
             200,
             "User profile and Used product listings retrieved",
-            data=_paginate_profile_and_used_product_listings(data, last_row, page_size))
+            data=_paginate_profile_and_used_product_listings(data, last_row.UsedProductListing, page_size))
     except Exception:
             return send_error_response(request, 500, "Internal server error")
 
@@ -518,11 +512,19 @@ async def get_used_product_listings_by_user_id(
     try:
         user_id = request.state.user.user_id
         next_token = schema.next_token
-        page_size = 1
+        page_size = schema.page_size
         payload = decode_cursor(next_token) if next_token else None
 
+        bookmark_subq = (
+            exists()
+            .where(
+                UserBookmarkUsedProductListing.used_product_listing_id == UsedProductListing.used_product_listing_id,
+                UserBookmarkUsedProductListing.user_id == user_id
+            )
+        ).label("is_bookmarked")
+
         q = (
-                select(UsedProductListing)
+                select(UsedProductListing, bookmark_subq)
                 .where(UsedProductListing.created_by == user_id)
                 .options(
                     selectinload(UsedProductListing.images),      
@@ -539,15 +541,12 @@ async def get_used_product_listings_by_user_id(
 
         q = q.order_by(UsedProductListing.created_at.desc(), UsedProductListing.id.asc()).limit(page_size)
 
-        products = (await db.execute(q)).scalars().all()
+        usedProductListings = (await db.execute(q)).scalars().all()
 
-        items = [_published_used_product_listing_response(product, product.images, product.location) for product in products]
-        last_row = products[-1] if products else None
-        return send_json_response(
-                200,
-                "Used product listings retrieved",
-                data=_paginate_used_product_listings_by_used_product_listing(items, last_row, page_size, next_token if payload else None)
-                )
+        items = [_user_used_product_listing_summary_response(used_product_listing, bool(is_bookmarked)) for used_product_listing, is_bookmarked in usedProductListings]
+        last_row = usedProductListings[-1] if usedProductListings else None
+
+        return send_json_response(200, "Used product listings retrieved", data=_paginate_used_product_listings_by_used_product_listing(items, last_row, page_size, next_token if payload else None))
     except Exception:
             return send_error_response(request, 500, "Internal server error")
 
@@ -583,7 +582,7 @@ async def create_or_update_used_product_listing(
             existing.country          = schema.country
             existing.state            = schema.state
             db.add(existing)
-            product    = existing
+            used_product_listing    = existing
         else:
           new_product = UsedProductListing(
             name             = schema.name,
@@ -596,7 +595,7 @@ async def create_or_update_used_product_listing(
             )
           db.add(new_product)
           await db.flush()
-          product = await db.scalar(
+          used_product_listing = await db.scalar(
             select(UsedProductListing)
             .options(selectinload(UsedProductListing.images))   
             .options(selectinload(UsedProductListing.location))  
@@ -605,16 +604,16 @@ async def create_or_update_used_product_listing(
                 UsedProductListing.created_by   == user_id,
             ))
           
-        old_images = product.images
+        old_images = used_product_listing.images
         keep_ids   = set(schema.keep_image_ids or [])
         for img in old_images:
             if img.id not in keep_ids:
-                deleted_keys.append(img.image_url) 
+                deleted_keys.append(img.url) 
                 await db.delete(img)
 
         for image in images:
             contents = await image.read()
-            key      = f"media/{media_id}/local-jobs/{product.used_product_listing_id}/{uuid.uuid4()}-{image.filename}"
+            key      = f"media/{media_id}/local-jobs/{used_product_listing.used_product_listing_id}/{uuid.uuid4()}-{image.filename}"
             await upload_to_s3(contents, key, image.content_type)
             uploaded_keys.append(key)
 
@@ -622,8 +621,8 @@ async def create_or_update_used_product_listing(
             width, height = img.size
  
             db.add(UsedProductListingImage(
-                used_product_listing_id = product.used_product_listing_id,
-                image_url    = key,
+                used_product_listing_id = used_product_listing.used_product_listing_id,
+                url    = key,
                 width        = width,
                 height       = height,
                 size         = len(contents),
@@ -633,7 +632,7 @@ async def create_or_update_used_product_listing(
         await db.flush() 
 
         location = schema.location
-        loc      = product.location
+        loc      = used_product_listing.location
 
         if loc:
             loc.latitude      = location["latitude"]
@@ -643,7 +642,7 @@ async def create_or_update_used_product_listing(
             db.add(loc)
         else:
             db.add(UsedProductListingLocation(
-                used_product_listing_id  = product.used_product_listing_id,
+                used_product_listing_id  = used_product_listing.used_product_listing_id,
                 latitude      = location["latitude"],
                 longitude     = location["longitude"],
                 geo           = location["geo"],
@@ -655,21 +654,21 @@ async def create_or_update_used_product_listing(
         for key in deleted_keys:
             await delete_from_s3(key)
 
-        await db.refresh(product, attribute_names=["images", "location", "owner"])    
-        return send_json_response(200, "Local job published", data=_published_used_product_listing_response(product, product.images, product.location))
+        await db.refresh(used_product_listing, attribute_names=["images", "location", "owner"])    
+        return send_json_response(200, "Local job published", data=_published_used_product_listing_response(used_product_listing, used_product_listing.images, used_product_listing.location))
     except Exception:
         for key in uploaded_keys:
             await delete_from_s3(key)
         return send_error_response(request, 500, "Internal server error")
 
-async def get_me_used_product_listings(
+async def get_published_used_product_listings(
     request: Request,
-    schema: GetMeUsedProductListingsSchema,
+    schema: GetPublishedUsedProductListingsSchema,
     db: AsyncSession,
 ):
     user_id = request.state.user.user_id
     next_token = schema.next_token
-    page_size = 1
+    page_size = schema.page_size
     payload = decode_cursor(next_token) if next_token else None
 
     q = (
@@ -690,10 +689,10 @@ async def get_me_used_product_listings(
 
     q = q.order_by(UsedProductListing.created_at.desc(), UsedProductListing.id.asc()).limit(page_size)
 
-    products = (await db.execute(q)).scalars().all()
+    usedProductListings = (await db.execute(q)).scalars().all()
 
-    items = [_published_used_product_listing_response(product, product.images, product.location) for product in products]
-    last_row = products[-1] if products else None
+    items = [_published_used_product_listing_response(used_product_listing, used_product_listing.images, used_product_listing.location) for used_product_listing in usedProductListings]
+    last_row = usedProductListings[-1] if usedProductListings else None
     return send_json_response(
         200,
         "Used product listings retrieved",
@@ -710,7 +709,7 @@ async def delete_used_product_listing(request: Request, schema: UsedProductListi
         media = await db.scalar(select(User.media_id).where(User.user_id == user.user_id))
         await db.delete(usedProductListing)
         if media:
-            await delete_directory_from_s3(f"media/{media}/used-product-listings/{schema.used_product_listing_id}")
+            await delete_directory_from_s3(f"media/{media}/used-used_product_listing-listings/{schema.used_product_listing_id}")
         return send_json_response(200, "Listing deleted")
     except Exception:
         return send_error_response(request, 500, "Internal server error")
@@ -733,7 +732,7 @@ async def unbookmark_used_product_listing(request: Request, schema: UsedProductL
     except Exception:
         return send_error_response(request, 500, "Internal server error")
 
-async def used_product_listings_search_suggestions(request: Request, schema:UsedProductSearchSuggestionsSchema, db: AsyncSession):
+async def used_product_listings_search_suggestions(request: Request, schema:UsedProductListingsSearchSuggestionsSchema, db: AsyncSession):
     try:
         clean  = schema.query.strip().lower()
         words  = clean.split()
