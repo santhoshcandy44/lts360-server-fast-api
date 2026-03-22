@@ -2,7 +2,7 @@ from pydantic import BaseModel, field_validator
 from typing import Optional, List
 
 
-class UpdateFCMTokenRequest(BaseModel):
+class UpdateFCMTokenSchema(BaseModel):
     token: str
 
     @field_validator("token")
@@ -13,7 +13,7 @@ class UpdateFCMTokenRequest(BaseModel):
         return v
 
 
-class UpdateE2EEPublicKeyRequest(BaseModel):
+class UpdateE2EEPublicKeySchema(BaseModel):
     public_key:  str
     key_version: int
 
@@ -44,7 +44,7 @@ class Contact(BaseModel):
         return v
 
 
-class SyncContactsRequest(BaseModel):
+class SyncContactsSchema(BaseModel):
     contacts: List[Contact]
 
     @field_validator("contacts")
@@ -76,7 +76,7 @@ class GetBookmarksSchema(BaseModel):
         return v
 
 
-class SearchChatsRequest(BaseModel):
+class SearchChatsSchema(BaseModel):
     search: str
 
     @field_validator("search")
@@ -87,7 +87,7 @@ class SearchChatsRequest(BaseModel):
         return v
 
 
-class LookupByPhoneRequest(BaseModel):
+class LookupByPhoneSchema(BaseModel):
     country_code: str
     local_number: str
 

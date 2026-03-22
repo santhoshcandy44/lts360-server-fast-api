@@ -1,16 +1,16 @@
 from database import get_db
 from .middleware.auth_middleware import authenticate_token
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Request, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from schemas.app_schemas import (
-    UpdateFCMTokenRequest,
-    UpdateE2EEPublicKeyRequest,
-    SyncContactsRequest,
+    UpdateFCMTokenSchema,
+    UpdateE2EEPublicKeySchema,
+    SyncContactsSchema,
     GetBookmarksSchema,
-    SearchChatsRequest,
-    LookupByPhoneRequest,
+    SearchChatsSchema,
+    LookupByPhoneSchema,
 )
 
 from controllers import app_controller
@@ -24,7 +24,7 @@ router = APIRouter(
 
 @router.put("/fcm-token")
 async def update_fcm_token(
-    body:    UpdateFCMTokenRequest,
+    body:    UpdateFCMTokenSchema,
     request: Request,
     db:      AsyncSession = Depends(get_db),
 ):
@@ -33,7 +33,7 @@ async def update_fcm_token(
 
 @router.put("/ee2ee-public-key")
 async def update_e2ee_public_key(
-    body:    UpdateE2EEPublicKeyRequest,
+    body:    UpdateE2EEPublicKeySchema,
     request: Request,
     db:      AsyncSession = Depends(get_db),
 ):
@@ -51,7 +51,7 @@ async def get_bookmarks(
 
 @router.post("/sync-contacts")
 async def sync_contacts(
-    body:    SyncContactsRequest,
+    body:    SyncContactsSchema,
     request: Request,
     db:      AsyncSession = Depends(get_db),
 ):
@@ -61,7 +61,7 @@ async def sync_contacts(
 @router.get("/search-chats")
 async def search_chats(
     request: Request,
-    params:  SearchChatsRequest = Depends(),
+    params:  SearchChatsSchema = Depends(),
     db:      AsyncSession = Depends(get_db),
 ):
     return await app_controller.search_chats(request, params, db)
@@ -70,7 +70,7 @@ async def search_chats(
 @router.get("/lookup/phone")
 async def search_by_number(
     request: Request,
-    params:  LookupByPhoneRequest = Depends(),
+    params:  LookupByPhoneSchema = Depends(),
     db:      AsyncSession = Depends(get_db),
 ):
     return await app_controller.search_by_number(request, params, db)
