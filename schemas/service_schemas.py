@@ -1,7 +1,7 @@
 from fastapi.exceptions import RequestValidationError
 from pydantic import BaseModel, ValidationError, field_validator, model_validator
 from typing import Annotated, Optional, List, Literal
-from fastapi import Form, UploadFile, File
+from fastapi import Form, Query, UploadFile, File
 import json
 
 VALID_COUNTRIES     = ['IN']
@@ -17,11 +17,12 @@ VALID_INDIAN_STATES = [
 MAX_IMAGE_SIZE    = 1 * 1024 * 1024  
 ALLOWED_TYPES     = ["image/jpeg", "image/png", "image/webp"]
 
+
 class GuestGetServicesSchema(BaseModel):
     s:              Optional[str]        = None
     latitude:       Optional[float]      = None
     longitude:      Optional[float]      = None
-    industries:     Optional[List[int]]  = None
+    industries:     Optional[List[int]]  = None 
     page_size:      Optional[int]        = None
     next_token:     Optional[str]        = None
     previous_token: Optional[str]        = None
@@ -58,6 +59,25 @@ class GuestGetServicesSchema(BaseModel):
         if v is not None and v <= 0:
             raise ValueError("Invalid page size format")
         return v
+
+    @classmethod
+    def as_depends(
+        cls,
+        s:          Optional[str]   = Query(default=None),
+        latitude:   Optional[float] = Query(default=None),
+        longitude:  Optional[float] = Query(default=None),
+        page_size:  int             = Query(default=20),
+        next_token: Optional[str]   = Query(default=None),
+        industries: Optional[List[int]] = Query(default=None), 
+    ) -> "GuestGetServicesSchema":
+        return cls(
+            s=s,
+            latitude=latitude,
+            longitude=longitude,
+            page_size=page_size,
+            next_token=next_token,
+            industries=industries
+        )    
 
 class GetServicesSchema(BaseModel):
     s:              Optional[str] = None

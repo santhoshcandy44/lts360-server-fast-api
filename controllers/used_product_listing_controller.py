@@ -400,7 +400,7 @@ async def guest_get_used_product_listings(request: Request, schema: GuestGetUsed
         lat = schema.latitude
         lon = schema.longitude
 
-        data = await _query_used_product_listings(db=db, page_size=page_size, query=s, user_lat=lat, user_long=lon, next_token=next_token)
+        data = await _query_used_product_listings(db=db, page_size=page_size, query=s, user_lat=lat, user_lon=lon, next_token=next_token)
         return send_json_response(200, "Local usedProductListings fetched", data= data)
     except Exception:
         return send_error_response(request, 500, "Internal server error")

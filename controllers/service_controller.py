@@ -1,5 +1,6 @@
 import io
 import json
+from typing import List
 import uuid
 from datetime import datetime, timezone
 from PIL import Image
@@ -271,12 +272,14 @@ def _relevance(query: str):
 async def _query_services(
     db:        AsyncSession,
     page_size: int,
+    industries: List[int],
     user_id:   int | None = None,
     query:     str | None = None,
     user_lat:  float | None = None,
     user_lon:  float | None = None,
     next_token: str | None = None
 ) -> tuple[list, any]:
+    
     payload = decode_cursor(next_token) if next_token else None
 
     has_loc = user_lat is not None and user_lon is not None
@@ -322,7 +325,7 @@ async def _query_services(
             selectinload(Service.owner).selectinload(User.chat_info)
         )
     )
-
+    
     if has_loc:
         q = q.join(
             ServiceLocation,
@@ -336,6 +339,9 @@ async def _query_services(
             Service.long_description,
             against=query
         ) > 0)
+
+    if len(industries) > 0:
+        q = q.where(Service.industry.in_(industries))     
 
     if payload:
         if has_loc and query:
@@ -414,7 +420,7 @@ async def _query_services(
         next_token if payload else None,
     )
 
-async def guest_get_services(request: Request, schema: GuestGetServicesSchema, db: AsyncSession):
+async def guest_get_services(request: Request, schema:  GuestGetServicesSchema, db: AsyncSession):
     try:
         s = schema.s
         page_size = schema.page_size
@@ -423,9 +429,16 @@ async def guest_get_services(request: Request, schema: GuestGetServicesSchema, d
         lat = schema.latitude
         lon = schema.longitude
 
-        data = await _query_services(db=db, page_size=page_size, query=s, user_lat=lat, user_long=lon, next_token=next_token)
+        if not s and (schema.industries is None or len(schema.industries) == 0):
+            return send_error_response(request, 400, "Service industries cannot be empty", error_code= "EMPTY_SERVICE_INDUSTRIES")
+                
+        data = await _query_services(db=db, page_size=page_size, industries = schema.industries, query=s, user_lat=lat, user_lon=lon, next_token=next_token)
         return send_json_response(200, "Services retrieved", data= data)
     except Exception:
+        import traceback
+        import sys
+        traceback.print_exc(file=sys.stderr)
+        sys.stderr.flush()
         return send_error_response(request, 500, "Internal server error")
     
 async def get_services(request: Request, schema: GetServicesSchema, db: AsyncSession):
@@ -439,7 +452,18 @@ async def get_services(request: Request, schema: GetServicesSchema, db: AsyncSes
         loc = await db.scalar(select(UserLocation).where(UserLocation.user_id == user_id))
         lat, lon = (float(loc.latitude), float(loc.longitude)) if loc else (None, None)
 
-        data = await _query_services(db=db, user_id=user_id, page_size=page_size, query=s, user_lat=lat, user_lon=lon, next_token=next_token)
+        user_industry_ids = []
+        if not s:
+            result = await db.execute(
+                select(UserServiceIndustry.industry_id)
+                .where(UserServiceIndustry.user_id == user_id)
+            )
+            user_industry_ids = result.scalars().all()
+            
+            if not user_industry_ids:
+                return send_error_response(request, 404, "User has no industries", "NO_USER_SERVICE_INDUSTRIES")
+
+        data = await _query_services(db=db, user_id=user_id, page_size=page_size, industries=user_industry_ids, query=s, user_lat=lat, user_lon=lon, next_token=next_token)
         return send_json_response(200, "Services retrived", data= data)
     except Exception:
         return send_error_response(request, 500, "Internal server error")    

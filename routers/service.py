@@ -1,7 +1,7 @@
 from database import get_db
 from .middleware.auth_middleware import authenticate_token
 
-from fastapi import APIRouter, Depends, Request, UploadFile, File, HTTPException
+from fastapi import APIRouter, Depends, Query, Request, UploadFile, File, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional, List
 
@@ -41,11 +41,17 @@ router = APIRouter(
 @router.get("/guest")
 async def guest_get_services(
     request: Request,
-    schema:  GuestGetServicesSchema = Depends(),
+    schema:  GuestGetServicesSchema = Depends(GuestGetServicesSchema.as_depends),
     db:      AsyncSession = Depends(get_db),
 ):
     return await service_controller.guest_get_services(request, schema, db)
 
+@router.get("/guest/industries")
+async def guest_get_industries(
+    request: Request,
+    db:      AsyncSession = Depends(get_db),
+):
+    return await service_controller.get_industries(request, db)
 
 @router.get("/guest/{service_id}")
 async def guest_get_service_by_service_id(
@@ -78,13 +84,6 @@ async def guest_search_suggestions(
     db:      AsyncSession = Depends(get_db),
 ):
     return await service_controller.search_suggestions(request, schema, db)
-
-@router.get("/guest/industries")
-async def guest_get_industries(
-    request: Request,
-    db:      AsyncSession = Depends(get_db),
-):
-    return await service_controller.guest_get_industries(request, db)
 
 #User
 @router.get("")

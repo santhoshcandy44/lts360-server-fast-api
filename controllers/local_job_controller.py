@@ -379,7 +379,7 @@ async def guest_get_local_jobs(request: Request, schema: GuestGetLocalJobsSchema
         lat = schema.latitude
         lon = schema.longitude
 
-        data = await _query_local_jobs(db=db, page_size=page_size, query=s, user_lat=lat, user_long=lon, next_token=next_token)
+        data = await _query_local_jobs(db=db, page_size=page_size, query=s, user_lat=lat, user_lon=lon, next_token=next_token)
 
         return send_json_response(200, "Local jobs fetched", data= data)
     except Exception:
