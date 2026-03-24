@@ -1,6 +1,8 @@
 from config import APP_NAME
 from contextlib import asynccontextmanager
 from database import init_db, engine
+from job_database import init_job_db, job_engine
+
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 
@@ -13,16 +15,25 @@ from routers import (
     account,
     service,
     used_product_listing,
-    local_job
+    local_job,
+    job
 )
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
-    print("✅ MySQL connected & tables ready")
+    print("✅ LTS360 connected & tables ready")
     yield
     await engine.dispose()
-    print("🛑 Shutting down")
+    print("🛑 LTS360 Shutting down")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await init_job_db()()
+    print("✅ LTS360 Jobs connected & tables ready")
+    yield
+    await job_engine.dispose()
+    print("🛑 LTS360 Jobs Shutting down")    
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -60,8 +71,9 @@ app.include_router(board.router,        prefix="/api/v1")
 app.include_router(profile.router,       prefix="/api/v1")
 app.include_router(account.router,       prefix="/api/v1")
 app.include_router(service.router,      prefix="/api/v1")
-app.include_router(local_job.router,    prefix="/api/v1")
 app.include_router(used_product_listing.router, prefix="/api/v1")
+app.include_router(local_job.router,    prefix="/api/v1")
+app.include_router(job.router, prefix="/api/v1")
 
 @app.get("/", tags=["Health"])
 async def root():

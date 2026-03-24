@@ -60,24 +60,26 @@ class GuestGetServicesSchema(BaseModel):
             raise ValueError("Invalid page size format")
         return v
 
-    @classmethod
-    def as_depends(
-        cls,
+
+def create_guest_get_services_params(
         s:          Optional[str]   = Query(default=None),
         latitude:   Optional[float] = Query(default=None),
         longitude:  Optional[float] = Query(default=None),
         page_size:  int             = Query(default=20),
         next_token: Optional[str]   = Query(default=None),
         industries: Optional[List[int]] = Query(default=None), 
-    ) -> "GuestGetServicesSchema":
-        return cls(
-            s=s,
+):
+    try:
+        return GuestGetServicesSchema(
+            s= s,
             latitude=latitude,
             longitude=longitude,
             page_size=page_size,
             next_token=next_token,
             industries=industries
-        )    
+        ) 
+    except ValidationError as e:
+        raise RequestValidationError(e.errors())           
 
 class GetServicesSchema(BaseModel):
     s:              Optional[str] = None

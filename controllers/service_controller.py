@@ -226,7 +226,7 @@ def _paginate_services(items: list, service:Service | None, lastDistance: int | 
         "previous_token": next_token if next_token else None,
     }
 
-def _paginate_profile_and_services(item: any, service:Service | None, page_size: int, next_token: str = None ) -> dict:
+def _paginate_profile_and_services(item: list, service:Service | None, page_size: int, next_token: str = None ) -> dict:
     has_next       = len(item["services"]) == page_size and service is not None
     next_token_out = encode_cursor({
         "created_at":      str(service.created_at),
@@ -399,7 +399,6 @@ async def _query_services(
 
     result = await db.execute(q)
     rows   = result.all()
-    last_row  = None
 
     last_row = rows[-1] if rows else None
 
@@ -431,14 +430,12 @@ async def guest_get_services(request: Request, schema:  GuestGetServicesSchema, 
 
         if not s and (schema.industries is None or len(schema.industries) == 0):
             return send_error_response(request, 400, "Service industries cannot be empty", error_code= "EMPTY_SERVICE_INDUSTRIES")
+        else:
+            industries = schema.industries or []
                 
-        data = await _query_services(db=db, page_size=page_size, industries = schema.industries, query=s, user_lat=lat, user_lon=lon, next_token=next_token)
+        data = await _query_services(db=db, page_size=page_size, industries = industries, query=s, user_lat=lat, user_lon=lon, next_token=next_token)
         return send_json_response(200, "Services retrieved", data= data)
     except Exception:
-        import traceback
-        import sys
-        traceback.print_exc(file=sys.stderr)
-        sys.stderr.flush()
         return send_error_response(request, 500, "Internal server error")
     
 async def get_services(request: Request, schema: GetServicesSchema, db: AsyncSession):
@@ -481,9 +478,9 @@ async def get_service_by_service_id(request: Request, schema: ServiceIdSchema, d
         )
 
         if not service:
-            return send_error_response(request, 404, "Used service listing not exist")
+            return send_error_response(request, 404, "Used product listing not exist")
         data=_user_service_detail_response(service=service)    
-        return send_json_response(200, "Used service listing job retrived", data = data)
+        return send_json_response(200, "Used product listing job retrived", data = data)
     except Exception:
         return send_error_response(request, 500, "Internal server error")
 
@@ -540,7 +537,7 @@ async def get_user_profile_and_services_by_user_id(
         last_row = services[-1] if services else None   
         return send_json_response(
             200,
-            "User profile and Used service listings retrieved",
+            "User profile and Used product listings retrieved",
             data=_paginate_profile_and_services(data, last_row.Service, page_size))
     except Exception:
             return send_error_response(request, 500, "Internal server error")
@@ -1020,7 +1017,7 @@ async def bookmark_service(request: Request, schema:ServiceIdSchema, db: AsyncSe
         user_id = request.state.user.user_id
         db.add(UserBookmarkService(user_id=user_id, service_id=schema.service_id))
         await db.flush()
-        return send_json_response(200, "Bookmarked")
+        return send_json_response(200, "Service bookmarked successfully")
     except Exception:
         return send_error_response(request, 500, "Internal server error")
 
@@ -1034,9 +1031,9 @@ async def unbookmark_service(request: Request, schema:ServiceIdSchema, db: Async
             )
         )
         if not bookmark:
-            return send_error_response(request, 404, "Faield to remove bookmark")
+            return send_error_response(request, 404, "Failed to remove bookmark")
         await db.delete(bookmark)
-        return send_json_response(200, "Unbookmarked")
+        return send_json_response(200, "Bookmark removed successfully")
     except Exception:
         return send_error_response(request, 500, "Internal server error")
 

@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, Request, UploadFile, File
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from schemas.profile_schemas import (
+    UpdateProfilePicSchema,
     UpdateFirstNameSchema,
     UpdateLastNameSchema,
     UpdateAboutSchema,
@@ -64,22 +65,9 @@ async def update_about(
 async def update_profile_pic(
     request:     Request,
     db:          AsyncSession = Depends(get_db),
-    profile_pic: UploadFile   = File(...),
+    schema: UpdateProfilePicSchema   = Depends(),
 ):
-    MAX_SIZE = 1 * 1024 * 1024
-    ALLOWED_TYPES = {"image/jpg", "image/jpeg", "image/png", "image/webp", "image/gif"}
-
-    if profile_pic.content_type not in ALLOWED_TYPES:
-            raise AppException(422, "Invalid profile pic type", "INVALID_IMAGE")
-    contents = await profile_pic.read()
-    if len(contents) > MAX_SIZE:
-        raise AppException(
-            422,
-            "File size must not exceed 1MB",
-            "IMAGE_TOO_LARGE"
-        )
-    await profile_pic.seek(0)
-    return await profile_controller.update_profile_pic(request, profile_pic, db)
+    return await profile_controller.update_profile_pic(request, schema, db)
 
 
 @router.patch("/email")

@@ -34,7 +34,6 @@ async def guest_get_local_jobs(
 ):
     return await local_job_controller.guest_get_local_jobs(request, schema, db)
 
-
 @router.get("/guest/{local_job_id}")
 async def guest_get_local_job(
     request:      Request,

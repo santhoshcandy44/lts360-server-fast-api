@@ -1,6 +1,25 @@
+from fastapi import UploadFile
 from pydantic import BaseModel, EmailStr, field_validator
 import re
 
+ALLOWED_IMAGE_TYPES = {"image/jpg", "image/jpeg", "image/png"}
+MAX_IMAGE_SIZE = 1 * 1024 * 1024
+
+class UpdateProfilePicSchema(BaseModel):
+    profile_pic: UploadFile
+
+    @field_validator("profile_pic")
+    def validate_profile_pic(cls, v: UploadFile):
+        if v.content_type not in ALLOWED_IMAGE_TYPES:
+            raise ValueError(
+                f"Invalid file type '{v.content_type}'. Only jpg, jpeg, png allowed"
+            )
+        if v.filename is None or v.filename.strip() == "":
+            raise ValueError("File name is required")
+        if v.size and v.size > MAX_IMAGE_SIZE:
+            raise ValueError(f"Image {v.filename} must be under 1MB")
+        return v
+    
 class UpdateFirstNameSchema(BaseModel):
     first_name: str
 

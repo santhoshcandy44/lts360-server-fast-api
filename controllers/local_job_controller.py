@@ -472,7 +472,6 @@ async def create_or_update_local_job(
 ):
     images = schema.images or []
     uploaded_keys  = []
-    deleted_keys   = []
     try:
         user_id  = request.state.user.user_id
         media_id = await db.scalar(select(User.media_id).where(User.user_id == user_id))
@@ -534,6 +533,8 @@ async def create_or_update_local_job(
           
         old_images = local_job.images
         keep_ids   = set(schema.keep_image_ids or [])
+        deleted_keys   = []
+        
         for img in old_images:
             if img.id not in keep_ids:
                 deleted_keys.append(img.url) 
@@ -699,7 +700,7 @@ async def get_local_job_applications(
 
         applications.append({
             "application_id": application.application_id,
-            "applied_at": str(application.applied_at.replace(tzinfo=timezone.utc).isoformat() if application.applied_at else None,),
+            "applied_at": str(application.applied_at.replace(tzinfo=timezone.utc).isoformat()) if application.applied_at else None,
             "is_reviewed": bool(application.is_reviewed),
             "contact_info": {
                 "email": u.email,

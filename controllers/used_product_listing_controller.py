@@ -555,7 +555,6 @@ async def create_or_update_used_product_listing(
 ):
     images = schema.images or []
     uploaded_keys  = []
-    deleted_keys   = []
     try:
         user_id  = request.state.user.user_id
         media_id = await db.scalar(select(User.media_id).where(User.user_id == user_id))
@@ -607,6 +606,8 @@ async def create_or_update_used_product_listing(
           
         old_images = used_product_listing.images
         keep_ids   = set(schema.keep_image_ids or [])
+        deleted_keys   = []
+
         for img in old_images:
             if img.id not in keep_ids:
                 deleted_keys.append(img.url) 

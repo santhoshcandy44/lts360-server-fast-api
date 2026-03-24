@@ -136,7 +136,21 @@ class UserServiceIndustry(SQLModel, table=True):
         back_populates="user_service_industries",
         sa_relationship_kwargs={"lazy": "selectin"}
     )
-         
+             
+class FCMToken(SQLModel, table=True):
+    __tablename__ = "fcm_tokens"
+ 
+    id:         Optional[int] = Field(primary_key=True)
+    user_id:    int           = Field(sa_column=Column(BigInteger, ForeignKey("users.user_id", ondelete="CASCADE"), unique=True, nullable=False))
+    fcm_token:  Optional[str] = Field(sa_column=Column(Text))  
+    created_at: datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+    user: Optional["User"] = Relationship(
+        back_populates="fcm_token",
+        sa_relationship_kwargs={"lazy": "selectin"}
+    ) 
+
 def _generate_short_code() -> str:
     chars = string.ascii_letters + string.digits 
     return ''.join(random.choices(chars, k=6))
@@ -154,18 +168,3 @@ def before_insert_local_job(mapper, connection, target):
  
     if not target.media_id:
         target.media_id = _generate_short_code()
-
-    
-class FCMToken(SQLModel, table=True):
-    __tablename__ = "fcm_tokens"
- 
-    id:         Optional[int] = Field(primary_key=True)
-    user_id:    int           = Field(sa_column=Column(BigInteger, ForeignKey("users.user_id", ondelete="CASCADE"), unique=True, nullable=False))
-    fcm_token:  Optional[str] = Field(sa_column=Column(Text))  
-    created_at: datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
-
-    user: Optional["User"] = Relationship(
-        back_populates="fcm_token",
-        sa_relationship_kwargs={"lazy": "selectin"}
-    ) 

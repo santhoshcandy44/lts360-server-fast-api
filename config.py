@@ -6,6 +6,7 @@ load_dotenv()  # load .env once here — no need to call it anywhere else
 
 # ── Database ─────────────────────────────────────────────────────────────────
 DATABASE_URL = os.getenv("DATABASE_URL")
+JOB_DATABASE_URL = os.getenv("JOB_DATABASE_URL")
 
 # ── App ──────────────────────────────────────────────────────────────────────
 APP_NAME    = os.getenv("APP_NAME", "FastAPI App")

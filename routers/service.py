@@ -24,6 +24,7 @@ from schemas.service_schemas import (
 
     ServiceSearchSuggestionsSchema,
     UpdateIndustriesSchema,
+    create_guest_get_services_params,
 
     create_service_form,
     update_thumbnail_form,
@@ -41,7 +42,7 @@ router = APIRouter(
 @router.get("/guest")
 async def guest_get_services(
     request: Request,
-    schema:  GuestGetServicesSchema = Depends(GuestGetServicesSchema.as_depends),
+    schema:  GuestGetServicesSchema = Depends(create_guest_get_services_params),
     db:      AsyncSession = Depends(get_db),
 ):
     return await service_controller.guest_get_services(request, schema, db)
@@ -83,7 +84,7 @@ async def guest_search_suggestions(
     schema:  ServiceSearchSuggestionsSchema = Depends(),
     db:      AsyncSession = Depends(get_db),
 ):
-    return await service_controller.search_suggestions(request, schema, db)
+    return await service_controller.services_search_suggestions(request, schema, db)
 
 #User
 @router.get("")

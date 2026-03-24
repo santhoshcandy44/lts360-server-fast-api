@@ -13,7 +13,7 @@ router = APIRouter(
 )
 
 
-@router.get("/")
+@router.get("")
 async def get_boards(
     request: Request,
     db:      AsyncSession = Depends(get_db),
@@ -30,7 +30,7 @@ async def guest_get_boards(
     return await board_controller.guest_get_boards(request, db)
 
 
-@router.put("/")
+@router.put("")
 async def update_boards(
     schema:    UpdateBoardsSchema,
     request: Request,

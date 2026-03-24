@@ -3,8 +3,8 @@ from config import PROFILE_BASE_URL
 import uuid
 from PIL import Image
 
-from fastapi import Request, UploadFile
-from schemas.profile_schemas import SendPhoneOTPSchema, UpdateAboutSchema, UpdateEmailSchema, UpdateEmailVerifyOTPSchema, UpdateFirstNameSchema, UpdateLastNameSchema, UpdateLocationSchema, VerifyPhoneOTPSchema
+from fastapi import Request
+from schemas.profile_schemas import SendPhoneOTPSchema, UpdateProfilePicSchema, UpdateAboutSchema, UpdateEmailSchema, UpdateEmailVerifyOTPSchema, UpdateFirstNameSchema, UpdateLastNameSchema, UpdateLocationSchema, VerifyPhoneOTPSchema
 from sqlmodel import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -32,8 +32,8 @@ def _user_response(user: User, location: UserLocation | None = None) -> dict:
         "created_at":         str(user.created_at.year) if user.created_at else None,
         "updated_at":         str(user.updated_at),
         "location": {
-            "latitude":      location.latitude,
-            "longitude":     location.longitude,
+            "latitude":      float(location.latitude),
+            "longitude":     float(location.longitude),
             "geo":           location.geo,
             "location_type": location.location_type,
             "updated_at":    str(location.updated_at),
@@ -109,10 +109,10 @@ async def update_about(request: Request, schema: UpdateAboutSchema, db: AsyncSes
     except Exception:
         return send_error_response(request, 500, "Internal server error")
 
-async def update_profile_pic(request: Request, profile_pic: UploadFile, db: AsyncSession):
+async def update_profile_pic(request: Request, schema: UpdateProfilePicSchema, db: AsyncSession):
     try:
         user_id  = request.state.user.user_id
-        contents = await profile_pic.read()
+        contents = await schema.profile_pic.read()
 
         img = Image.open(io.BytesIO(contents))
         img = img.convert("RGB") 
@@ -130,8 +130,8 @@ async def update_profile_pic(request: Request, profile_pic: UploadFile, db: Asyn
         img_96x96.save(buffer_96x96, format="JPEG", quality=85)
         contents_96x96 = buffer_96x96.getvalue()
 
-        key       = f"profiles/{user_id}/{uuid.uuid4()}.jpg"
-        key_96x96 = f"profiles/{user_id}/{uuid.uuid4()}_96x96.jpg"
+        key       = f"{user_id}/profile/{uuid.uuid4()}.jpg"
+        key_96x96 = f"{user_id}/profile/{uuid.uuid4()}_96x96.jpg"
 
         await upload_to_s3(contents_512x512,       key,       "image/jpeg")
         await upload_to_s3(contents_96x96, key_96x96, "image/jpeg")
@@ -151,6 +151,10 @@ async def update_profile_pic(request: Request, profile_pic: UploadFile, db: Asyn
             "updated_at": str(result.updated_at),
         })
     except Exception:
+        import traceback
+        import sys
+        traceback.print_exc(file=sys.stderr)
+        sys.stderr.flush()
         return send_error_response(request, 500, "Internal server error")
 
 async def update_email(request: Request, schema: UpdateEmailSchema, db: AsyncSession):
