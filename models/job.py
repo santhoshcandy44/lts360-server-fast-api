@@ -284,6 +284,13 @@ class City(SQLModel, table=True):
         sa_relationship_kwargs={"lazy": "selectin"},
     )
 
+CURRENCY_SYMBOLS = {
+    "INR": "₹",
+    "USD": "$",
+    "EUR": "€",
+    "GBP": "£",
+}
+
 class Job(SQLModel, table=True):
     __tablename__ = "jobs"
     __table_args__ = (
@@ -315,7 +322,7 @@ class Job(SQLModel, table=True):
     experience_range_min:  int           = Field(default=0)
     experience_range_max:  int           = Field(default=0)
     experience_fixed:      int           = Field(default=0)
-    salary_not_disclosed:  bool          = Field(default=False)
+    is_salary_not_disclosed:  bool          = Field(default=False)
     salary_min:            Decimal       = Field(sa_column=Column(Numeric(10, 2), nullable=False))
     salary_max:            Decimal       = Field(sa_column=Column(Numeric(10, 2), nullable=False))
     employment_type:       str           = Field(
@@ -383,12 +390,40 @@ class Job(SQLModel, table=True):
             return ""
     
     @property
-    def skills_display(self) -> List[str]:
+    def must_have_skills_display(self) -> List[str]:
         return [
             item.skill.name
             for item in self.must_have_skills
             if item.skill and item.skill.name
         ]
+    
+    @property
+    def good_to_have_skills_display(self) -> List[str]:
+        return [
+            item.skill.name
+            for item in self.must_have_skills
+            if item.skill and item.skill.name
+        ]
+
+    @property
+    def salary_currency_type_display(self) -> str:
+        return self.posted_by.settings.currency_type
+    
+    @property
+    def salary_display(self) -> str:
+        currency = self.salary_currency_type_display or "INR"
+        symbol = CURRENCY_SYMBOLS.get(currency, currency)
+
+        min_val = int(self.salary_min or 0)
+        max_val = int(self.salary_max or 0)
+
+        if self.is_salary_not_disclosed:
+            return "Not disclosed"
+
+        if min_val == max_val:
+            return f"{symbol}{min_val:,}"
+
+        return f"{symbol}{min_val:,} - {symbol}{max_val:,}"
 
 class JobMustHaveSkill(SQLModel, table=True):
     __tablename__ = "job_must_have_skills"
