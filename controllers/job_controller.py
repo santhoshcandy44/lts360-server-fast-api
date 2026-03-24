@@ -528,7 +528,7 @@ async def _query_jobs(
     _job_summary_response(
         row.Job,
         bool(row.is_bookmarked) if user_id else False,
-        float(row.distance)     if has_loc else None
+        distance=float(row.distance)     if has_loc else None
     )
     for row in rows]
 
