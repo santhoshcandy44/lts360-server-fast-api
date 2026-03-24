@@ -3,10 +3,11 @@ import io
 import uuid
 from pathlib import Path
 from fastapi import Request
-from typing import Optional, List, Any
+from typing import Optional, List
 
 from PIL import Image
 
+from config import BASE_URL
 from schemas.job_schemas import ApplicantProfileSchema, GetJobsSchema, GetSavedJobsSchema, GuestGetJobsSchema, JobIdSchema, LocationSearchSuggestionsSchema, RoleSearchSuggestionsSchema, SkillSearchSuggestionsSchema, UpdateCertificatesSchema, UpdateEducationSchema, UpdateExperienceSchema, UpdateLanguagesSchema, UpdateNoExperienceSchema, UpdateProfessionalInfoSchema, UpdateResumeSchema, UpdateSkillsSchema
 from schemas.service_schemas import UpdateIndustriesSchema
 
@@ -242,7 +243,7 @@ async def _fetch_full_profile(db: AsyncSession, external_user_id: int) -> Option
         )
     )
 
-def _paginate_job(items: list, service:Job | None, lastDistance: int | None, lastTotalRelavance: int | None,  page_size: int,  next_token: str = None ) -> dict:
+def _paginate_jobs(items: list, service:Job | None, lastDistance: int | None, lastTotalRelavance: int | None,  page_size: int,  next_token: str = None ) -> dict:
     has_next       = len(items) == page_size and service is not None
     next_token_out = encode_cursor({
         "created_at":      str(service.created_at),
@@ -271,45 +272,104 @@ def _paginate_jobs_by_job(items: list, job:Job | None, page_size: int, next_toke
 def _job_summary_response(
         job: Job,
         is_bookmarked: bool = False,
+        is_applied: bool =False,
         distance:     float | None = None
         ) -> dict:
     return {
-        "id":              job.id,
-        "job_id":          job.job_id,
-        "title":           job.title,
-        "slug":            job.slug,
-        "description":     job.description,
-        "work_mode":       job.work_mode,
-        "employment_type": job.employment_type,
-        "salary_min":      str(job.salary_min),
-        "salary_max":      str(job.salary_max),
-        "salary_not_disclosed": job.salary_not_disclosed,
-        "industry_code":   job.industry_code,
-        "status":          job.status,
-        "approval_status": job.approval_status,
-        "vacancies":       job.vacancies,
-        "expiry_date":     job.expiry_date,
-        "posted_at":       job.posted_at,
+        "recruiter":{
+                "recruiter_id": job.posted_by.id,
+                "first_name": job.posted_by.first_name,
+                "last_name": job.posted_by.last_name,
+                "role": job.posted_by.role,
+                "company": job.posted_by.organization_name,
+                "profile_pic_url": job.posted_by.profile_pic_url,
+                "profile_pic_url_small": job.posted_by.profile_pic_url_small,
+                "years_of_experience": job.posted_by.years_of_experience,
+                "is_verified": bool(job.posted_by.is_verified),
+        },
+        "organization":{
+            "organization_id": job.organization_id,
+            "name": job.organization.name,
+            "logo": job.organization.logo,
+            "address": job.organization.name,
+            "website": job.organization.website,
+            "country": job.organization.country.name,
+            "state": job.organization.state.name,
+            "city": job.organization.city.name,
+            "postal_code": job.organization.postal_code
+        },
+       "job": {
+            "job_id":          job.job_id,
+            "title":           job.title,
+            "work_mode":       job.work_mode,
+            "location":        job.city,
+            "experience_type": job.experience_type,
+            "experience":      job.experience_display,
+            "salary_currency_type":      job.salary_currency_type,
+            "salary_min":      str(job.salary_min),
+            "salary_max":      str(job.salary_max),
+            "salary_not_disclosed": job.salary_not_disclosed,
+            "must_have_skills":   job.must_have_skills,
+            "good_to_have_skills":   job.good_to_have_skills,
+            "employment_type":   job.employment_type,
+            "vacancies":       job.vacancies,
+            "posted_at":       job.posted_at,
+            "slug":             f"{BASE_URL}/jobs/{job.slug}",
+            "is_bookmarked":   is_bookmarked,
+            "distance":        distance
+       }
     }
 
-def _job_response(job: Job) -> dict:
+def _job_detail_response(
+        job: Job,
+        is_bookmarked: bool = False,
+        is_applied: bool =False,
+        distance:     float | None = None
+        ) -> dict:
     return {
-        "id":              job.id,
-        "job_id":          job.job_id,
-        "title":           job.title,
-        "slug":            job.slug,
-        "description":     job.description,
-        "work_mode":       job.work_mode,
-        "employment_type": job.employment_type,
-        "salary_min":      str(job.salary_min),
-        "salary_max":      str(job.salary_max),
-        "salary_not_disclosed": job.salary_not_disclosed,
-        "industry_code":   job.industry_code,
-        "status":          job.status,
-        "approval_status": job.approval_status,
-        "vacancies":       job.vacancies,
-        "expiry_date":     job.expiry_date,
-        "posted_at":       job.posted_at,
+        "recruiter":{
+                "recruiter_id": job.posted_by.id,
+                "first_name": job.posted_by.first_name,
+                "last_name": job.posted_by.last_name,
+                "role": job.posted_by.role,
+                "company": job.posted_by.organization_name,
+                "profile_pic_url": job.posted_by.profile_pic_url,
+                "profile_pic_url_small": job.posted_by.profile_pic_url_small,
+                "years_of_experience": job.posted_by.years_of_experience,
+                "is_verified": bool(job.posted_by.is_verified),
+        },
+        "organization":{
+            "organization_id": job.organization_id,
+            "name": job.organization.name,
+            "logo": job.organization.logo,
+            "address": job.organization.name,
+            "website": job.organization.website,
+            "country": job.organization.country.name,
+            "state": job.organization.state.name,
+            "city": job.organization.city.name,
+            "postal_code": job.organization.postal_code
+        },
+       "job": {
+            "job_id":          job.job_id,
+            "title":           job.title,
+            "work_mode":       job.work_mode,
+            "location":        job.city,
+            "description":        job.description,
+            "education": job.education,
+            "experience_type": job.experience_type,
+            "experience":      job.experience_display,
+            "salary_currency_type":      job.salary_currency_type,
+            "salary_min":      str(job.salary_min),
+            "salary_max":      str(job.salary_max),
+            "salary_not_disclosed": job.salary_not_disclosed,
+            "must_have_skills":   job.must_have_skills,
+            "good_to_have_skills":   job.good_to_have_skills,
+            "vacancies":       job.vacancies,
+            "posted_at":       job.posted_at,
+            "slug":             f"{BASE_URL}/jobs/{job.slug}",
+            "is_bookmarked":   is_bookmarked,
+            "is_applied": is_applied
+       }
     }
 
 def _haversine(lat: float, lon: float):
@@ -370,13 +430,13 @@ async def _query_jobs(
         select(*cols)
         .options(
             selectinload(Job.industry),
+            selectinload(Job.role),
             selectinload(Job.education),
             selectinload(Job.department),
-            selectinload(Job.role),
-            selectinload(Job.organization),
-            selectinload(Job.posted_by),
             selectinload(Job.must_have_skills),
-            selectinload(Job.good_to_have_skills)
+            selectinload(Job.good_to_have_skills),
+            selectinload(Job.organization),
+            selectinload(Job.posted_by)
         )
         .where(
             Job.approval_status == "active",
@@ -409,7 +469,6 @@ async def _query_jobs(
     if len(industries) > 0:
         q = q.where(Job.industry_code.in_(industries))     
 
-   
     if payload:
         if has_loc and query:
                 q = q.where(or_(
@@ -435,7 +494,6 @@ async def _query_jobs(
                 Job.created_at < payload["created_at"],
                 and_(Job.created_at == payload["created_at"], Job.id > payload["id"]),
             ))
-    
     
     if has_loc and query:
         q = q.order_by(
@@ -479,7 +537,7 @@ async def _query_jobs(
     for row in rows]
 
    
-    return _paginate_job(
+    return _paginate_jobs(
         jobs,
         getattr(last_row, "Job", None),
         getattr(last_row, "distance", None) if has_loc else None,
@@ -605,11 +663,11 @@ async def get_job_by_job_id(request: Request, schema: JobIdSchema, db: AsyncSess
         row = result.first()
 
         if not row:
-            error(404, "Job not exist")
+            return send_error_response(request, 404, "Job not exist")
 
         job, is_bookmarked, is_applied = row
 
-        data = _job_response(job)
+        data = _job_detail_response(job)
         data.is_bookmarked = is_bookmarked
         data.is_applied = is_applied
 

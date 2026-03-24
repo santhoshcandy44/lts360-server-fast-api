@@ -52,9 +52,10 @@ class RecruiterProfile(SQLModel, table=True):
                                                 nullable=False, default="RECRUITER",
                                             )
                                         )
-    company:            str           = Field(max_length=50)
+    organization_name:            str           = Field(max_length=50)
     phone:              Optional[str] = Field(default=None, max_length=20, nullable=True)
-    profile_picture:    Optional[str] = Field(default=None, nullable=True)
+    profile_pic_url:    Optional[str] = Field(default=None, nullable=True)
+    profile_pic_small:    Optional[str] = Field(default=None, nullable=True)
     bio:                str           = Field(sa_column=Column(Text, nullable=False))
     years_of_experience: int          = Field(default=1)
     created_at:         datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
@@ -112,10 +113,10 @@ class Organization(SQLModel, table=True):
     id:                   Optional[int] = Field(default=None, primary_key=True)
     organization_id:      int           = Field(sa_column=Column(BigInteger, unique=True, nullable=False))
     user_id:              int           = Field(sa_column=Column(Integer, ForeignKey("recruiter_profiles.id", ondelete="CASCADE"), nullable=False, index=True))
-    organization_name:    str           = Field(max_length=255)
+    name:    str           = Field(max_length=255)
     logo:                 Optional[str] = Field(default=None, nullable=True)
     email:                str           = Field(max_length=254)
-    organization_address: str           = Field(max_length=255)
+    address: str           = Field(max_length=255)
     website:              str           = Field(max_length=200)
     country_id:           Optional[int] = Field(default=None, sa_column=Column(MEDIUMINT(unsigned=True), ForeignKey("countries.id", ondelete="SET NULL"), nullable=True))
     state_id:             Optional[int] = Field(default=None, sa_column=Column(MEDIUMINT(unsigned=True), ForeignKey("states.id", ondelete="SET NULL"), nullable=True))
@@ -125,6 +126,21 @@ class Organization(SQLModel, table=True):
     created_at:        datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at:        datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
     
+    country: Optional["Country"] = Relationship(
+        back_populates="organizations",
+        sa_relationship_kwargs={"lazy": "selectin"},
+    )
+
+    state: Optional["State"] = Relationship(
+        back_populates="organizations",
+        sa_relationship_kwargs={"lazy": "selectin"},
+    )
+
+    city: Optional["City"] = Relationship(
+        back_populates="organizations",
+        sa_relationship_kwargs={"lazy": "selectin"},
+    )
+
     user: Optional[RecruiterProfile] = Relationship(
         back_populates="organizations",
         sa_relationship_kwargs={"lazy": "selectin"},
@@ -228,6 +244,11 @@ class Country(SQLModel, table=True):
     name: str = Field(max_length=100)
     iso2: str = Field(max_length=2, sa_column=Column(String(2), unique=True))
 
+    organizations: List["Organization"] = Relationship(
+        back_populates="country",
+        sa_relationship_kwargs={"lazy": "selectin"},
+    )
+
 class State(SQLModel, table=True):
     __tablename__ = "states"
     __table_args__ = {"extend_existing": True}
@@ -236,6 +257,11 @@ class State(SQLModel, table=True):
     name:       str = Field(max_length=100)
     iso2:       str = Field(max_length=2, sa_column=Column(String(2), unique=True))
     country_id: int = Field(sa_column=Column(MEDIUMINT(unsigned=True), nullable=False))
+
+    organizations: List["Organization"] = Relationship(
+        back_populates="state",
+        sa_relationship_kwargs={"lazy": "selectin"},
+    )
 
 class City(SQLModel, table=True):
     __tablename__ = "cities"
@@ -247,6 +273,16 @@ class City(SQLModel, table=True):
     state_id:   int = Field(sa_column=Column(MEDIUMINT(unsigned=True), nullable=False))
     latitude:      Decimal        = Field(sa_column=Column(Numeric(10, 8), nullable=False))
     longitude:     Decimal        = Field(sa_column=Column(Numeric(11, 8), nullable=False))
+
+    jobs: List["Job"] = Relationship(
+        back_populates="city",
+        sa_relationship_kwargs={"lazy": "selectin"},
+    )
+
+    organizations: List["Organization"] = Relationship(
+        back_populates="city",
+        sa_relationship_kwargs={"lazy": "selectin"},
+    )
 
 class Job(SQLModel, table=True):
     __tablename__ = "jobs"
@@ -320,6 +356,8 @@ class Job(SQLModel, table=True):
     updated_at:        datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     # Relationships
+    city:    Optional[City] = Relationship(back_populates="jobs",         sa_relationship_kwargs={"lazy": "selectin"})
+
     posted_by:    Optional[RecruiterProfile] = Relationship(back_populates="jobs",         sa_relationship_kwargs={"lazy": "selectin"})
     organization: Optional[Organization]     = Relationship(back_populates="jobs",         sa_relationship_kwargs={"lazy": "selectin"})
     education:    Optional[Education]        = Relationship(back_populates="jobs",         sa_relationship_kwargs={"lazy": "selectin", "foreign_keys": "[Job.education_code]"})
@@ -330,6 +368,27 @@ class Job(SQLModel, table=True):
     good_to_have_skills: List["JobGoodToHaveSkill"] = Relationship(back_populates="job",   sa_relationship_kwargs={"lazy": "selectin"})
     applications:        List["Application"]        = Relationship(back_populates="job",   sa_relationship_kwargs={"lazy": "selectin"})
     bookmarks:           List["UserBookmarkJob"]     = Relationship(back_populates="job",  sa_relationship_kwargs={"lazy": "selectin"})
+
+    @property
+    def experience_display(self) -> str:
+            if self.experience_type == "fresher":
+                return "Fresher"
+
+            if self.experience_type == "fixed":
+                return f"{self.experience_range_min} years"
+
+            if self.experience_type == "min_max":
+                return f"{self.experience_range_min} - {self.experience_range_max} years"
+
+            return ""
+    
+    @property
+    def skills_display(self) -> List[str]:
+        return [
+            item.skill.name
+            for item in self.must_have_skills
+            if item.skill and item.skill.name
+        ]
 
 class JobMustHaveSkill(SQLModel, table=True):
     __tablename__ = "job_must_have_skills"

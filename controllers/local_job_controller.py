@@ -65,7 +65,7 @@ def _user_local_job_summary_response(
             "salary_unit":     local_job.salary_unit,
             "salary_min":      local_job.salary_min,
             "salary_max":      local_job.salary_max,
-            "slug":            f"{BASE_URL}/local-local_job/{local_job.short_code}",
+            "slug":            f"{BASE_URL}/local-jobs/{local_job.short_code}",
             "is_bookmarked":   is_bookmarked,
             "is_applied":      is_applied,
             "distance":        distance,
@@ -116,7 +116,7 @@ def _local_job_detail_response(
             "salary_max":      local_job.salary_max,
             "country":         local_job.country,
             "state":           local_job.state,
-            "slug":            f"{BASE_URL}/local-local_job/{local_job.short_code}",
+            "slug":            f"{BASE_URL}/local-jobs/{local_job.short_code}",
             "is_bookmarked":   is_bookmarked,
             "is_applied":      is_applied,
             "distance":        distance,
@@ -154,7 +154,7 @@ def _published_local_job_response(
             "country":         local_job.country,
             "state":           local_job.state,
             "status":          local_job.status,
-            "slug":            f"{BASE_URL}/local-local_job/{local_job.short_code}",
+            "slug":            f"{BASE_URL}/local-jobs/{local_job.short_code}",
             "images": [
                 {
                     "image_id":  img.id,
@@ -188,7 +188,7 @@ def _paginate_local_jobs(items: list, last_local_job:LocalJob | None, lastDistan
         "previous_token": next_token if next_token else None,
     }
 
-def _paginate_published_jobs(items: list, last_local_job:LocalJob | None, page_size: int, next_token: str = None ) -> dict:
+def _paginate_jobs_by_job(items: list, last_local_job:LocalJob | None, page_size: int, next_token: str = None ) -> dict:
     has_next       = len(items) == page_size and last_local_job is not None
     next_token_out = encode_cursor({
         "created_at":      str(last_local_job.created_at),
@@ -627,7 +627,7 @@ async def get_published_local_jobs(
     return send_json_response(
         200,
         "Local jobs retrieved",
-        data=_paginate_published_jobs(items, getattr(last_row, "LocalJob", None), page_size, next_token if payload else None)
+        data=_paginate_jobs_by_job(items, getattr(last_row, "LocalJob", None), page_size, next_token if payload else None)
         )
 
 async def delete_local_job(request: Request, schema: LocalJobIdSchema, db: AsyncSession):
