@@ -353,6 +353,7 @@ def _job_detail_response(
             "work_mode":       job.work_mode,
             "location":        job.city,
             "description":        job.description,
+            "industry":        job.industry.name,
             "education": job.education,
             "experience_type": job.experience_type,
             "experience":      job.experience_display,
