@@ -4,10 +4,10 @@ import uuid
 from typing import Optional
 
 import httpx
-
-from fastapi import Request, UploadFile
+from fastapi import Request
 from fastapi.responses import JSONResponse
 from models.user import User
+
 from sqlalchemy import delete, select ,and_, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -163,11 +163,10 @@ def _job_detail_resposne(job: Job) -> dict:
         "vacancies": job.vacancies,
         "highlights": job.highlights,
         "status": job.status,
-        "approval_status": job.approval_status,
-        "expiry_date": str(job.expiry_date) if job.expiry_date else None,
+        "approval_status": job.approval_status
     }
 
-async def _handle_signin_success(request, user_id, email, sign_up_method,  first_name, last_name, db: AsyncSession):
+async def _handle_signin_success(request, user_id, email, sign_up_method, first_name, last_name, db: AsyncSession):
 
     recruiterProfile = await db.scalar(select(RecruiterProfile).where(RecruiterProfile.external_user_id == user_id))
     if not recruiterProfile:
@@ -186,6 +185,7 @@ async def _handle_signin_success(request, user_id, email, sign_up_method,  first
     last_sign_in = datetime.now(timezone.utc)
     recruiterProfile.last_sign_in = last_sign_in     
     await db.flush()
+    await db.refresh(recruiterProfile)
 
     access_token, refresh_token = generate_tokens(user_id, email, sign_up_method, recruiterProfile.last_sign_in, "User")
 
@@ -198,9 +198,9 @@ async def _handle_signin_success(request, user_id, email, sign_up_method,  first
         key="access_token",
         value=access_token,
         httponly=True,
-        secure=False,       # set True in production (HTTPS only)
+        secure=False,      
         samesite="lax",
-        max_age=15 * 60,    # 15 minutes
+        max_age=60 * 60,   
     )
     response.set_cookie(
         key="refresh_token",
@@ -233,7 +233,7 @@ async def email_signin(request: Request, schema: EmailLoginSchema, db: AsyncSess
     except Exception:
         return send_error_response(request, 500, "Internal server error")
 
-async def logout(request: Request):
+async def signout(request: Request):
     response = JSONResponse(content={"message": "Logged out successfully"}, status_code=200)
     response.delete_cookie("access_token")
     response.delete_cookie("refresh_token")
@@ -254,7 +254,7 @@ async def google_signin(request: Request, schema: GoogleLoginSchema, db: AsyncSe
             return send_error_response(request, 401, api_resp.get("message", "Authentication failed"))
 
         ud = api_resp["data"]["user_details"]
-        return await _handle_signin_success(request, ud["user_id"], ud["email"], ud["first_name"], ud["last_name"], db)
+        return await _handle_signin_success(request, ud["user_id"], ud["email"], "google", ud["first_name"], ud["last_name"], db)
 
     except Exception:
         return send_error_response(request, 500, "Internal server error")
@@ -503,7 +503,6 @@ async def get_job_listings_meta(request: Request, db: AsyncSession):
 
 async def get_job_listings(
     request: Request,
-    page: int,
     schema: JobListingsFilterSchema,
     db: AsyncSession,
 ):
@@ -546,16 +545,16 @@ async def get_job_listings(
         total = len(all_jobs)
         per_page = ALL_JOBS_PAGE_SIZE
         num_pages = max(1, (total + per_page - 1) // per_page)
-        start = (page - 1) * per_page
+        start = (schema.page - 1) * per_page
         page_jobs = all_jobs[start: start + per_page]
 
         return send_json_response(200, "Jobs retrieved", data={
             "results": [_job_list_response(j, currency_type) for j in page_jobs],
             "count": total,
             "num_pages": num_pages,
-            "current_page": page,
-            "has_next": page < num_pages,
-            "has_previous": page > 1,
+            "current_page": schema.page,
+            "has_next": schema.page < num_pages,
+            "has_previous": schema.page > 1,
             "is_filters_applied": any([schema.experience, schema.work_mode, schema.date_from, schema.date_to]),
         })
     except Exception:
@@ -622,12 +621,14 @@ async def get_job_listing(request: Request, schema: JobIdSchema, db: AsyncSessio
         job = await _get_job_for_recruiter(schema.job_id, profile, db)
         if not job:
             return send_error_response(request, 404, "Job not found")
-        return send_json_response(200, "Job retrieved", data=_job_detail_resposne(job))
+        job_response = _job_detail_resposne(job)
+        job_response["days_remaining"] = job.days_remaining
+        job_response["is_published"]   = job.is_published
+        job_response["is_draft"]       = job.is_draft
+        job_response["expiry_date"]     = job.expiry_date.isoformat() if job.expiry_date else None
+
+        return send_json_response(200, "Job retrieved", data=job_response)
     except Exception:
-        import traceback
-        import sys
-        traceback.print_exc(file=sys.stderr)
-        sys.stderr.flush()
         return send_error_response(request, 500, "Internal server error")
 
 async def update_job_listing(request: Request, job_id: int, schema: JobCreateSchema, db: AsyncSession):
@@ -1202,13 +1203,15 @@ async def get_recruiter_settings(request: Request, db: AsyncSession):
                 "is_recruiter_profile_complete": False,
             })
         
-        settings = await db.scalar(select(RecruiterSettings).where(RecruiterSettings.user_id == profile.id))
+        settings = await db.scalar(select(RecruiterSettings).options(selectinload(
+            RecruiterSettings.country
+        )).where(RecruiterSettings.user_id == profile.id))
         countries = (await db.scalars(select(Country))).all()
 
         return send_json_response(200, "OK", data={
             "is_recruiter_profile_complete": True,
             "countries": [{"iso2": c.iso2, "name": c.name} for c in countries],
-            "country": settings.country_id if settings else "IN",
+            "country": settings.country.iso2 if settings.country else "IN",
             "currencies": [
                 {"code": "INR", "name": "Indian Rupee"},
                 {"code": "USD", "name": "US Dollar"},

@@ -64,10 +64,11 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     field_errors = {}
 
     for err in errors:
-        field = ".".join(str(loc) for loc in err["loc"] if loc != "body")
+        SKIP = {"body", "query"}
+        field = ".".join(str(loc) for loc in err["loc"] if loc not in SKIP)
 
         field_errors[field] = err["msg"]
-
+        
     return send_error_response(
         request=request,
         status_code=422,

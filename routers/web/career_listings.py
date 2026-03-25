@@ -162,7 +162,7 @@ async def create_job_listing(
 @router.get("/job-listings/{job_id}")
 async def get_job_listing(
     request: Request,
-    schema: JobCreateSchema = Depends(), 
+    schema: JobIdSchema = Depends(),
     db: AsyncSession = Depends(get_db),
     _: None = Depends(authenticate_token),
 ):
@@ -279,7 +279,7 @@ async def get_organization_profile(
 @router.put("/organization-profile")
 async def update_organization_profile(
     request: Request,
-    schema: OrganizationProfileSchema = Depends(),
+    schema: OrganizationProfileSchema = Depends(create_organization_profile_form),
     db: AsyncSession = Depends(get_db),
     _: None = Depends(authenticate_token),
 ):
@@ -300,7 +300,7 @@ async def get_recruiter_profile(
 @router.put("/recruiter-profile")
 async def update_recruiter_profile(
     request: Request,
-    schema: RecruiterProfileSchema = Depends(),
+    schema: RecruiterProfileSchema = Depends(create_recruiter_profile_form),
     db: AsyncSession = Depends(get_db),
     _: None = Depends(authenticate_token),
 ):
@@ -367,8 +367,8 @@ async def get_account(
     return await career_listings_controller.get_account(request, db)
 
 @router.post("/account/signout")
-async def logout(request: Request):
-    return await career_listings_controller.logout(request)
+async def signout(request: Request):
+    return await career_listings_controller.signout(request)
 
 @router.get("/plans")
 async def get_plans(

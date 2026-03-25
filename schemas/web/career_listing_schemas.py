@@ -1,5 +1,5 @@
 import datetime
-from datetime import datetime,  date
+from datetime import datetime,  date, timezone
 
 from typing import List, Optional
 from fastapi import Form, Query, UploadFile
@@ -264,7 +264,7 @@ class JobCreateSchema(BaseModel):
     good_to_have_skills: List[str] = []
     vacancies: int = 1
     highlights: List[str] = []
-    expiry_date: Optional[date] = None
+    expiry_date: Optional[datetime] = None
 
     @field_validator("title")
     @classmethod
@@ -367,11 +367,17 @@ class JobCreateSchema(BaseModel):
 
     @field_validator("expiry_date")
     @classmethod
-    def validate_expiry_date(cls, v: Optional[date]) -> Optional[date]:
-        if v and v < date.today():
-            raise ValueError("Expiry date must be in the future")
-        return v
+    def validate_expiry_date(cls, v: Optional[datetime]) -> Optional[datetime]:
+        if v:
+            now = datetime.now(timezone.utc)
 
+            if v.tzinfo is None:
+                v = v.replace(tzinfo=timezone.utc)
+
+            if v < now:
+                raise ValueError("Expiry date must be in the future")
+        return v
+    
 class JobIdSchema(BaseModel):
     job_id: int
 
@@ -541,6 +547,7 @@ def create_organization_profile_form(
     state: Optional[int] = Form(default=None),
     location: Optional[int] = Form(default=None),
     postal_code: str = Form(default=""),
+    logo:  Optional[UploadFile] = Form(default=None)
 ) -> OrganizationProfileSchema:
     try:
         return OrganizationProfileSchema(
@@ -552,6 +559,7 @@ def create_organization_profile_form(
             state=state,
             location=location,
             postal_code=postal_code,
+            logo = logo
         )
     except ValidationError as e:
         raise RequestValidationError(e.errors())
@@ -644,6 +652,7 @@ def create_recruiter_profile_form(
     role: str = Form(...),
     years_of_experience: int = Form(default=0),
     bio: str = Form(default=""),
+    profile_pic:  Optional[UploadFile] = Form(default=None)
 ) -> RecruiterProfileSchema:
     try:
         return RecruiterProfileSchema(
@@ -653,6 +662,7 @@ def create_recruiter_profile_form(
             role=role,
             years_of_experience=years_of_experience,
             bio=bio,
+            profile_pic = profile_pic
         )
     except ValidationError as e:
         raise RequestValidationError(e.errors())

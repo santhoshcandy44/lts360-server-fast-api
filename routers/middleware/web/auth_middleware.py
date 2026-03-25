@@ -33,8 +33,6 @@ async def authenticate_token(
         if not existing_user:
             raise AppException(401, "Something went wrong", "USER_NOT_FOUND")
 
-        print(existing_user.last_sign_in)
-        print(payload.get("lastSignIn"))
         # if str(existing_user.last_sign_in) != payload.get("lastSignIn"):
         #     raise AppException(498, "Something went wrong", "INVALID_SESSION")
 

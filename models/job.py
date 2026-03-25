@@ -109,6 +109,11 @@ class RecruiterSettings(SQLModel, table=True):
         sa_relationship_kwargs={"lazy": "selectin"},
     )
 
+    country: Optional["Country"] = Relationship(
+        back_populates="settings",
+        sa_relationship_kwargs={"lazy": "selectin"},
+    )
+
 class Organization(SQLModel, table=True):
     __tablename__ = "organizations"
 
@@ -251,6 +256,11 @@ class Country(SQLModel, table=True):
         sa_relationship_kwargs={"lazy": "selectin"},
     )
 
+    settings: Optional["RecruiterSettings"] = Relationship(
+        back_populates="country",
+        sa_relationship_kwargs={"lazy": "selectin"},
+    )
+
 class State(SQLModel, table=True):
     __tablename__ = "states"
     __table_args__ = {"extend_existing": True}
@@ -341,7 +351,7 @@ class Job(SQLModel, table=True):
 
     vacancies:             int           = Field(default=1)
     highlights:            list          = Field(sa_column=Column(JSON, nullable=False, default=list))
-    expiry_date:           datetime      = Field(sa_column=Column(Date, nullable=False))
+    expiry_date:           datetime      = Field(sa_column=Column(DateTime, nullable=False))
     posted_at:             datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     posted_by_id:          int           = Field(sa_column=Column(Integer, ForeignKey("recruiter_profiles.id", ondelete="CASCADE"), nullable=False, index=True))
@@ -426,6 +436,31 @@ class Job(SQLModel, table=True):
             return f"{symbol}{min_val:,}"
 
         return f"{symbol}{min_val:,} - {symbol}{max_val:,}"
+    
+    @property
+    def days_remaining(self) -> int:
+        if not self.expiry_date:
+            return -1
+        now = datetime.now(timezone.utc)
+        expiry = self.expiry_date.replace(tzinfo=timezone.utc) if self.expiry_date.tzinfo is None else self.expiry_date
+        delta = expiry - now
+        return delta.days 
+
+    @property
+    def is_expired(self) -> bool:
+        if not self.expiry_date:
+            return False
+        now = datetime.now(timezone.utc)
+        expiry = self.expiry_date.replace(tzinfo=timezone.utc) if self.expiry_date.tzinfo is None else self.expiry_date
+        return now > expiry
+    
+    @property
+    def is_published(self) -> bool:
+        return self.status == "published"
+
+    @property
+    def is_draft(self) -> bool:
+        return self.status == "draft"
 
 class JobMustHaveSkill(SQLModel, table=True):
     __tablename__ = "job_must_have_skills"
