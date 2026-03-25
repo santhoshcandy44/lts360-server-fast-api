@@ -8,6 +8,7 @@ from typing import Optional, List
 from PIL import Image
 
 from config import BASE_URL
+from models.user import UserLocation
 from schemas.job_schemas import ApplicantProfileSchema, GetJobsSchema, GetSavedJobsSchema, GuestGetJobsSchema, JobIdSchema, LocationSearchSuggestionsSchema, RoleSearchSuggestionsSchema, SkillSearchSuggestionsSchema, UpdateCertificatesSchema, UpdateEducationSchema, UpdateExperienceSchema, UpdateLanguagesSchema, UpdateNoExperienceSchema, UpdateProfessionalInfoSchema, UpdateResumeSchema, UpdateSkillsSchema
 from schemas.service_schemas import UpdateIndustriesSchema
 
@@ -280,8 +281,8 @@ def _job_summary_response(
                 "recruiter_id": job.posted_by.id,
                 "first_name": job.posted_by.first_name,
                 "last_name": job.posted_by.last_name,
-                "role": job.posted_by.role,
-                "company": job.posted_by.organization_name,
+                "role": job.posted_by.role_display,
+                "organization_name": job.posted_by.organization_name,
                 "profile_pic_url": job.posted_by.profile_pic_url,
                 "profile_pic_url_small": job.posted_by.profile_pic_url_small,
                 "years_of_experience": job.posted_by.years_of_experience,
@@ -302,16 +303,15 @@ def _job_summary_response(
             "job_id":          job.job_id,
             "title":           job.title,
             "work_mode":       job.work_mode,
-            "location":        job.city,
-            "experience_type": job.experience_type,
+            "location":        job.city.name,
             "experience":      job.experience_display,
             "salary_currency_type":      job.salary_currency_type_display,
             "salary":      job.salary_display,
-            "must_have_skills":   job.must_have_skills,
-            "good_to_have_skills":   job.good_to_have_skills,
-            "employment_type":   job.employment_type,
+            "must_have_skills":   job.must_have_skills_display,
+            "good_to_have_skills":   job.good_to_have_skills_display,
+            "employment_type":   job.employment_type_display,
             "vacancies":       job.vacancies,
-            "posted_at":       job.posted_at,
+            "posted_at":       str(job.posted_at.replace(tzinfo=timezone.utc).isoformat()),
             "slug":             f"{BASE_URL}/jobs/{job.slug}",
             "is_bookmarked":   is_bookmarked,
             "distance":        distance
@@ -329,8 +329,8 @@ def _job_detail_response(
                 "recruiter_id": job.posted_by.id,
                 "first_name": job.posted_by.first_name,
                 "last_name": job.posted_by.last_name,
-                "role": job.posted_by.role,
-                "company": job.posted_by.organization_name,
+                "role": job.posted_by.role_display,
+                "organization_name": job.posted_by.organization_name,
                 "profile_pic_url": job.posted_by.profile_pic_url,
                 "profile_pic_url_small": job.posted_by.profile_pic_url_small,
                 "years_of_experience": job.posted_by.years_of_experience,
@@ -351,18 +351,22 @@ def _job_detail_response(
             "job_id":          job.job_id,
             "title":           job.title,
             "work_mode":       job.work_mode,
-            "location":        job.city,
+            "location":        job.city.name,
             "description":        job.description,
             "industry":        job.industry.name,
-            "education": job.education,
+            "education": job.education.name,
+            "role": job.role.name,
+            "employment_type": job.employment_type_display,
+            "department": job.department.name,
+            "highlights": job.highlights_display,
             "experience_type": job.experience_type,
             "experience":      job.experience_display,
             "salary_currency_type":      job.salary_currency_type_display,
             "salary":      job.salary_display,
-            "must_have_skills":   job.must_have_skills,
-            "good_to_have_skills":   job.good_to_have_skills,
+            "must_have_skills":   job.must_have_skills_display,
+            "good_to_have_skills":   job.good_to_have_skills_display,
             "vacancies":       job.vacancies,
-            "posted_at":       job.posted_at,
+            "posted_at":       str(job.posted_at.replace(tzinfo=timezone.utc).isoformat()),
             "slug":             f"{BASE_URL}/jobs/{job.slug}",
             "is_bookmarked":   is_bookmarked,
             "is_applied": is_applied
@@ -529,7 +533,7 @@ async def _query_jobs(
     _job_summary_response(
         row.Job,
         bool(row.is_bookmarked) if user_id else False,
-        distance=float(row.distance)     if has_loc else None
+        distance=float(row.distance) if has_loc else None
     )
     for row in rows]
 
@@ -567,6 +571,8 @@ async def guest_get_job_listings(request: Request, schema: GuestGetJobsSchema, d
             work_modes=work_modes,
             salary_min=schema.salary_min,
             salary_max=schema.salary_max,
+            user_lat=schema.latitude,
+            user_lon=schema.longitude,
             next_token=next_token
         )
 
@@ -575,6 +581,41 @@ async def guest_get_job_listings(request: Request, schema: GuestGetJobsSchema, d
     except Exception:
         return send_error_response(request, 500, "Internal server error")
 
+async def guest_get_job_by_job_id(request: Request, schema: JobIdSchema, db: AsyncSession):
+    try:
+        job = await db.scalar(
+            select(Job)
+            .where(
+                Job.job_id == schema.job_id,
+                Job.approval_status == "active"
+            )
+            .options(
+                selectinload(Job.industry),
+                selectinload(Job.education),
+                selectinload(Job.department),
+                selectinload(Job.role),
+                selectinload(Job.organization),
+                selectinload(Job.posted_by),
+                selectinload(Job.must_have_skills),
+                selectinload(Job.good_to_have_skills)
+            )
+        )
+
+        if not job:
+            return send_error_response(request, 404, "Job not exist")
+
+
+        data = _job_detail_response(job)
+
+        return send_json_response(
+            200,
+            "Job fetched successfully",
+            data=data
+        )
+
+    except Exception:
+        return send_error_response(request, 500, "Internal server error")
+    
 async def get_job_listings(request: Request, schema: GetJobsSchema, db: AsyncSession):
     try:
         user_id = request.state.user.user_id
@@ -597,6 +638,9 @@ async def get_job_listings(request: Request, schema: GetJobsSchema, db: AsyncSes
             if m.strip().lower() in VALID_WORK_MODES
         ]
 
+        loc = await db.scalar(select(UserLocation).where(UserLocation.user_id == user_id))
+        lat, lon = (float(loc.latitude), float(loc.longitude)) if loc else (None, None)
+
         data = await _query_jobs(
             db=db,
             user_id=user_id,
@@ -606,16 +650,13 @@ async def get_job_listings(request: Request, schema: GetJobsSchema, db: AsyncSes
             work_modes=work_modes,
             salary_min=schema.salary_min,
             salary_max=schema.salary_max,
+            user_lat=lat,
+            user_lon=lon,
             next_token=next_token
         )
 
         return send_json_response(200, "Jobs retrieved", data=data)
-
     except Exception:
-        import traceback
-        import sys
-        traceback.print_exc(file=sys.stderr)
-        sys.stderr.flush()
         return send_error_response(request, 500, "Internal server error")
     
 async def get_job_by_job_id(request: Request, schema: JobIdSchema, db: AsyncSession):
@@ -664,10 +705,8 @@ async def get_job_by_job_id(request: Request, schema: JobIdSchema, db: AsyncSess
 
         job, is_bookmarked, is_applied = row
 
-        data = _job_detail_response(job)
-        data.is_bookmarked = is_bookmarked
-        data.is_applied = is_applied
-
+        data = _job_detail_response(job, is_bookmarked, is_applied)
+  
         return send_json_response(
             200,
             "Job fetched successfully",
@@ -675,6 +714,10 @@ async def get_job_by_job_id(request: Request, schema: JobIdSchema, db: AsyncSess
         )
 
     except Exception:
+        import traceback
+        import sys
+        traceback.print_exc(file=sys.stderr)
+        sys.stderr.flush()
         return send_error_response(request, 500, "Internal server error")
     
 #Apply & Bookmark 
@@ -752,37 +795,41 @@ async def unbookmark_job(request: Request, schema: JobIdSchema, db: AsyncSession
 
         if not bookmark:
             return send_error_response(request, 400, "Failed to remove bookmark")
+        
+        await db.execute(
+            delete(UserBookmarkJob)
+            .where(
+                UserBookmarkJob.external_user_id == external_user_id,
+                UserBookmarkJob.job_id == schema.job_id
+            )
+        )
+
         return send_json_response(200, "Bookmark removed successfully")
     except Exception:
         return send_error_response(request, 500, "Internal server error")
 
 async def get_saved_jobs(request: Request, schema:GetSavedJobsSchema, db: AsyncSession):
     try:
-        external_user_id = request.state.user.user_id
+        user_id = request.state.user.user_id
         page_size = schema.page_size
         next_token = schema.next_token
 
         payload = decode_cursor(next_token) if next_token else None
 
+        loc = await db.scalar(select(UserLocation).where(UserLocation.user_id == user_id))
+        lat, lon = (float(loc.latitude), float(loc.longitude)) if loc else (None, None)
+        has_loc = lat is not None and lon is not None
+
+        cols = [UserBookmarkJob, Job]
+
+        if has_loc:
+            cols.append( _haversine(lat, lon))
+
         q = (
-            select(UserBookmarkJob)
-            .where(UserBookmarkJob.external_user_id == external_user_id)
-            .options(
-                selectinload(UserBookmarkJob.job).options(
-                    selectinload(Job.industry),
-                    selectinload(Job.education),
-                    selectinload(Job.department),
-                    selectinload(Job.role),
-                    selectinload(Job.organization).options(
-                        selectinload(Organization.user).options(
-                            selectinload(RecruiterProfile.settings)
-                        )
-                    ),
-                    selectinload(Job.posted_by),
-                    selectinload(Job.must_have_skills).selectinload(JobMustHaveSkill.skill),
-                    selectinload(Job.good_to_have_skills).selectinload(JobGoodToHaveSkill.skill),
-                )
-            )
+            select(*cols)
+            .where(UserBookmarkJob.external_user_id == user_id)
+            .join(UserBookmarkJob.job)       
+            .join(Job.city)  
             .order_by(UserBookmarkJob.created_at.desc(), UserBookmarkJob.job_id.asc())
             .limit(page_size)
         )
@@ -793,9 +840,10 @@ async def get_saved_jobs(request: Request, schema:GetSavedJobsSchema, db: AsyncS
                     and_(UserBookmarkJob.created_at == payload["created_at"], UserBookmarkJob.id > payload["id"]),
                 ))
 
-        bookmarks = (await db.scalars(q)).all()
-
-        items = [_job_response(b) for b in bookmarks]
+        result = await db.execute(q)
+        bookmarks = result.all()
+       
+        items = [_job_summary_response(job, is_bookmarked=True, distance= distance) for b, job, distance in bookmarks]
 
         last_row = items[-1] if items else None
 
@@ -805,6 +853,10 @@ async def get_saved_jobs(request: Request, schema:GetSavedJobsSchema, db: AsyncS
             data=_paginate_jobs_by_job(items, getattr(last_row, "Job", None), page_size, next_token if payload else None)
         )
     except Exception:
+        import traceback
+        import sys
+        traceback.print_exc(file=sys.stderr)
+        sys.stderr.flush()
         return send_error_response(request, 500, "Internal server error")
 
 #Applicant Profile
@@ -1266,7 +1318,8 @@ async def guest_get_industries(request: Request, db: AsyncSession):
                 {
                     "code":        i.code,
                     "name":        i.name,
-                    "description": i.description
+                    "description": i.description,
+                    "is_selected": False
                 }
                 for i in all_industries
             ]

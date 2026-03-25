@@ -955,11 +955,11 @@ async def toggle_top_application(request: Request, schema: ManageApplicationSche
         if not job:
             return send_error_response(request, 404, "Job not exist")
 
-        app = await db.scalar(select(Application).where(Application.application_id == schema.application_id, Application.job_id == job.job_id))
-        if not app:
+        application = await db.scalar(select(Application).where(Application.application_id == schema.application_id, Application.job_id == job.job_id))
+        if not application:
             return send_error_response(request, 404, "Application not exist")
 
-        app.is_top_application = not app.is_top_application
+        application.is_top_application = not application.is_top_application
         await db.flush()
         return send_json_response(200, "Top application updated", data={"is_top_application": app.is_top_application})
     except Exception:

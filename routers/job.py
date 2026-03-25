@@ -75,7 +75,7 @@ async def guest_get_job_by_job_id(
     schema: JobIdSchema = Depends(),
     db:           AsyncSession = Depends(get_db)
 ):
-    return await job_controller.get_job_by_job_id(request, schema, db)
+    return await job_controller.guest_get_job_by_job_id(request, schema, db)
 
 @router.get("")
 async def get_job_listings(

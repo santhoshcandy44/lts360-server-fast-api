@@ -46,7 +46,7 @@ class GuestGetJobsSchema(BaseModel):
     s_longitude: Optional[float] = None
     latitude: Optional[float] = None
     longitude: Optional[float] = None
-    industries:     Optional[List[int]]  = None 
+    industries:     Optional[List[str]]  = None 
     page_size: Optional[int] = None
     next_token: Optional[str] = None
     previous_token: Optional[str] = None
@@ -89,14 +89,14 @@ class GuestGetJobsSchema(BaseModel):
         if v is not None and v < -1:
             raise ValueError("Salary must be a number or -1")
         return v
-
+ 
     @field_validator("industries")
     def validate_industries(cls, v):
         if v is not None:
-            if not all(isinstance(i, int) and i > 0 for i in v):
-                raise ValueError("Each industry ID must be a positive integer")
+            if not all(isinstance(i, str) and i.strip() for i in v):
+                raise ValueError("Each industry must be a non-empty string")
         return v
-    
+        
     @field_validator("page_size")
     def validate_page_size(cls, v):
         if v is not None and v <= 0:
@@ -112,7 +112,7 @@ def create_guest_get_jobs_params(
     latitude: Optional[float] = Query(default=None),
     longitude: Optional[float] = Query(default=None),
 
-    industries: Optional[List[int]] = Query(default=None),
+    industries: Optional[List[str]] = Query(default=None),
 
     page_size: Optional[int] = Query(default=20),
     next_token: Optional[str] = Query(default=None),

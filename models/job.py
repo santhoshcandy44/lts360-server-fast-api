@@ -37,6 +37,13 @@ class Plan(SQLModel, table=True):
         sa_relationship_kwargs={"lazy": "selectin"},
     )
 
+RECRUITER_ROLE_DISPLAY = {
+    "RECRUITER":          "Recruiter",
+    "HIRING_MANAGER":     "Hiring Manager",
+    "TALENT_ACQUISITION": "Talent Acquisition",
+    "HR":                 "HR",
+}
+
 class RecruiterProfile(SQLModel, table=True):
     __tablename__ = "recruiter_profiles"
 
@@ -55,7 +62,7 @@ class RecruiterProfile(SQLModel, table=True):
     organization_name:            str           = Field(max_length=50)
     phone:              Optional[str] = Field(default=None, max_length=20, nullable=True)
     profile_pic_url:    Optional[str] = Field(default=None, nullable=True)
-    profile_pic_small:    Optional[str] = Field(default=None, nullable=True)
+    profile_pic_url_small:    Optional[str] = Field(default=None, nullable=True)
     bio:                str           = Field(sa_column=Column(Text, nullable=False))
     years_of_experience: int          = Field(default=1)
     created_at:         datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
@@ -88,6 +95,10 @@ class RecruiterProfile(SQLModel, table=True):
         back_populates="user",
         sa_relationship_kwargs={"lazy": "selectin"},
     )
+
+    @property
+    def role_display(self) -> str:
+        return RECRUITER_ROLE_DISPLAY.get(self.role, self.role.replace("_", " ").title())
 
 class RecruiterSettings(SQLModel, table=True):
     __tablename__ = "recruiter_settings"
@@ -303,6 +314,23 @@ CURRENCY_SYMBOLS = {
     "GBP": "£",
 }
 
+EMPLOYMENT_TYPE_DISPLAY = {
+    "full_time":  "Full Time",
+    "part_time":  "Part Time",
+    "contract":   "Contract",
+    "internship": "Internship",
+}
+
+HIGHLIGHTS_MAP = {
+    "free_food": {"type": "free_food", "label": "Free Food",  "emoji": "🍕", "description": "Daily meals provided"},
+    "free_room": {"type": "free_room", "label": "Free Room",  "emoji": "🏠", "description": "Company housing"},
+    "transport": {"type": "transport", "label": "Transport",  "emoji": "🚌", "description": "Commute coverage"},
+    "bonus":     {"type": "bonus",     "label": "Bonus",      "emoji": "💰", "description": "Yearly rewards"},
+    "health":    {"type": "health",    "label": "Health",     "emoji": "🏥", "description": "Full medical plan"},
+    "training":  {"type": "training",  "label": "Training",   "emoji": "🎓", "description": "Skill development"},
+    "flexible":  {"type": "flexible",  "label": "Flexible",   "emoji": "⏰", "description": "Choose your schedule"},
+}
+
 class Job(SQLModel, table=True):
     __tablename__ = "jobs"
     __table_args__ = (
@@ -436,6 +464,24 @@ class Job(SQLModel, table=True):
             return f"{symbol}{min_val:,}"
 
         return f"{symbol}{min_val:,} - {symbol}{max_val:,}"
+
+    @property
+    def employment_type_display(self) -> str:
+        return EMPLOYMENT_TYPE_DISPLAY.get(self.employment_type, self.employment_type.replace("_", " ").title())    
+    
+    @property
+    def highlights_display(self) -> list:
+        if not self.highlights:
+            return []
+        return [
+            {
+                "label":       HIGHLIGHTS_MAP[h]["label"],
+                "emoji":       HIGHLIGHTS_MAP[h]["emoji"],
+                "description": HIGHLIGHTS_MAP[h]["description"],
+            }
+            for h in self.highlights
+            if h in HIGHLIGHTS_MAP
+        ]
     
     @property
     def days_remaining(self) -> int:
