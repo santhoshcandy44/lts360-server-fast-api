@@ -67,6 +67,8 @@ class RecruiterProfile(SQLModel, table=True):
     trial_end_date:     datetime      = Field(default_factory=lambda: datetime.now(timezone.utc) + timedelta(days=15))
     is_trial_active:    bool          = Field(default=True)
 
+    last_sign_in:       datetime       = Field(nullable=False)
+    
     created_at:        datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at:        datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
 
@@ -92,11 +94,11 @@ class RecruiterSettings(SQLModel, table=True):
 
     id:            Optional[int] = Field(default=None, primary_key=True)
     user_id:       int           = Field(sa_column=Column(Integer, ForeignKey("recruiter_profiles.id", ondelete="CASCADE"), unique=True, nullable=False))
-    country_id:    Optional[int] = Field(default=None, sa_column=Column(MEDIUMINT(unsigned=True), ForeignKey("countries.id", ondelete="SET NULL"), nullable=True))
+    country_id:    Optional[int] = Field(default=None, sa_column=Column(MEDIUMINT(unsigned=True), ForeignKey("countries.id", ondelete="SET NULL"), nullable=True, default=101))
     currency_type: str           = Field(
                                        sa_column=Column(
                                            SAEnum("USD", "EUR", "GBP", "INR", name="recruiter_currency"),
-                                           nullable=False, default="USD",
+                                           nullable=False, default="INR",
                                        )
                                    )
     created_at:        datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))

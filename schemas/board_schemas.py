@@ -1,7 +1,6 @@
 from pydantic import BaseModel, field_validator
 from typing import Optional, List
 
-
 class Board(BaseModel):
     board_id:       int
     is_selected:    bool

@@ -36,7 +36,7 @@ def send_error_response(
         "error": {
             "code": error_code,
             "message": message,
-            "details": str(error_details),
+            "details": error_details,
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "path": request.url.path,
         },

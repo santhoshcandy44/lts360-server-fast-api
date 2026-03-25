@@ -769,7 +769,7 @@ class UpdateCertificatesSchema(BaseModel):
         return v
 
     @model_validator(mode="after")
-    def validate_images(self):
+    def validate_certificates_info_and_images(self):
         for cert in self.certificates_info:
             if cert.certificate_id is None:
                 if f"certificate_{cert.key}" not in self.images:

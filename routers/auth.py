@@ -49,29 +49,29 @@ async def google_sign_up(
 
 @router.post("/signin/email")
 async def email_sign_in(
-    schema:    EmailSignInSchema,
     request: Request,
+    schema:    EmailSignInSchema,
     db:      AsyncSession = Depends(get_db),
 ):
     return await auth_controller.email_sign_in(request, schema, db)
 
 @router.post("/signin/google")
 async def google_sign_in(
-    schema:    GoogleSignInSchema,
     request: Request,
+    schema:    GoogleSignInSchema,
     db:      AsyncSession = Depends(get_db),
 ):
     return await auth_controller.google_sign_in(request, schema, db)
 
 @router.post("/signin/lts360")
 async def partner_email_sign_in(
-    schema:    LTS360SignInSchema,
     request: Request,
+    schema:    LTS360SignInSchema,
     db:      AsyncSession = Depends(get_db),
 ):
     return await auth_controller.partner_email_sign_in(request, schema, db)
 
-@router.post("/signin/google/lts360")
+@router.post("/signin/lts360/google")
 async def partner_google_sign_in(
     schema:    GoogleLTS360SignInSchema,
     request: Request,

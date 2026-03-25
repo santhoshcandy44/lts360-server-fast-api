@@ -5,6 +5,7 @@ from job_database import init_job_db, job_engine
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
 
 from helpers.response_helper import AppException, send_error_response
 from routers import (
@@ -18,6 +19,9 @@ from routers import (
     local_job,
     job
 )
+
+
+from routers.web import career_listings
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -41,7 +45,14 @@ async def lifespan(app: FastAPI):
     yield
 
 app = FastAPI(title=APP_NAME, lifespan=lifespan)
-    
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000"],  
+    allow_credentials=True,                   
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 @app.exception_handler(AppException)
 async def valdiate_app_exception_handler(request: Request, exc: AppException):
     return send_error_response(request, exc.status_code, exc.message, exc.error_code)
@@ -49,19 +60,19 @@ async def valdiate_app_exception_handler(request: Request, exc: AppException):
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     errors = exc.errors()
-    if errors:
-        first_error = errors[0]
-        field   = " -> ".join(str(loc) for loc in first_error["loc"] if loc != "body")
-        message = first_error["msg"]
-        detail  = f"{field}: {message}" if field else message
-    else:
-        detail = "Invalid request"
+
+    field_errors = {}
+
+    for err in errors:
+        field = ".".join(str(loc) for loc in err["loc"] if loc != "body")
+
+        field_errors[field] = err["msg"]
 
     return send_error_response(
         request=request,
         status_code=422,
-        message=detail,
-        error_details=errors or None,
+        message="Please fix some errors",
+        error_details=field_errors,  
         error_code="VALIDATION_ERROR",
     )
 
@@ -74,6 +85,9 @@ app.include_router(service.router,      prefix="/api/v1")
 app.include_router(used_product_listing.router, prefix="/api/v1")
 app.include_router(local_job.router,    prefix="/api/v1")
 app.include_router(job.router, prefix="/api/v1")
+
+app.include_router(career_listings.router, prefix="/api/v1")
+
 
 @app.get("/", tags=["Health"])
 async def root():
