@@ -387,7 +387,10 @@ def _job_detail_response(
                 "name": job.city.name
             },
             "description":        job.description,
-            "industry":        job.industry.name,
+            "industry":   {
+                            "code":   job.industry.code,
+                            "name": job.industry.name
+                        },
             "education": job.education.name,
             "role": job.role.name,
             "employment_type": job.employment_type_display,
@@ -691,10 +694,6 @@ async def get_job_listings(request: Request, schema: GetJobsSchema, db: AsyncSes
 
         return send_json_response(200, "Jobs retrieved", data=data)
     except Exception:
-        import traceback
-        import sys
-        traceback.print_exc(file=sys.stderr)
-        sys.stderr.flush()
         return send_error_response(request, 500, "Internal server error")
     
 async def get_job_by_job_id(request: Request, schema: JobIdSchema, db: AsyncSession):
@@ -752,6 +751,10 @@ async def get_job_by_job_id(request: Request, schema: JobIdSchema, db: AsyncSess
         )
 
     except Exception:
+        import traceback
+        import sys
+        traceback.print_exc(file=sys.stderr)
+        sys.stderr.flush()
         return send_error_response(request, 500, "Internal server error")
     
 #Apply & Bookmark 

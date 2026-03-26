@@ -792,7 +792,7 @@ async def get_publish_countries_options(request: Request, db: AsyncSession):
         result = await db.execute(q)
         countries = result.scalars().all()
         return send_json_response(200, "Countries fetched", data=[
-            {"id": c.id, "name": c.name}
+            {"country_id": c.id, "name": c.name}
             for c in countries
         ])
     except Exception as e:
@@ -805,16 +805,12 @@ async def get_publish_states_options(
 ):
     try:
         q = select(State).where(State.country_id == schema.country_id)
-
-        if schema.search:
-            q = q.where(State.name.ilike(f"%{schema.search}%"))
-
         q = q.order_by(State.name).limit(50)
 
         result = await db.execute(q)
         states = result.scalars().all()
         return send_json_response(200, "States fetched", data=[
-            {"id": s.id, "name": s.name}
+            {"country_id": s.country_id, "state_id": s.id,  "name": s.name}
             for s in states
         ])
     except Exception as e:
