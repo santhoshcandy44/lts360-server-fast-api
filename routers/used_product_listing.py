@@ -9,6 +9,7 @@ from schemas.used_product_listing_schemas import (
     GuestGetUsedProductListingsSchema,
 
     GetUsedProductListingsSchema,
+    PublishUsedProductListingStateOptionsSchema,
     UsedProductListingIdParam,
     GetUserProfileUsedProductListingsSchema,
     GetUsedProductListingsByUserIdSchema,
@@ -114,6 +115,25 @@ async def get_published_used_product_listings(
     _:       None = Depends(authenticate_token),
 ):
     return await used_product_listing_controller.get_published_used_product_listings(request, schema, db)
+
+
+@router.get("/publish/location/countries/options")
+async def get_publish_countries_options(
+    request: Request,
+    db:      AsyncSession = Depends(get_db),
+    _:       None = Depends(authenticate_token),
+):
+    return await used_product_listing_controller.get_publish_countries_options(request, db)
+
+
+@router.get("/publish/location/states/options")
+async def get_publish_states_options(
+    request: Request,
+    schema:  PublishUsedProductListingStateOptionsSchema = Depends(),
+    db:      AsyncSession = Depends(get_db),
+    _:       None = Depends(authenticate_token),
+):
+    return await used_product_listing_controller.get_publish_states_options(request, schema, db)
 
 @router.get("/{used_product_listing_id}")
 async def get_used_product_listing_by_used_product_listing_id(

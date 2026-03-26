@@ -565,6 +565,15 @@ class UpdateServiceLocationSchema(BaseModel):
             raise ValueError("Location type cannot be empty")
         return v
 
+class PublishServiceStateOptionsSchema(BaseModel):
+    country_id: int
+
+    @field_validator("country_id")
+    def validate_country_id(cls, v):
+        if v <= 0:
+            raise ValueError("Invalid country id format")
+        return v
+
 class UpdateIndustriesSchema(BaseModel):
     industries: List[int]
 

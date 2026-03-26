@@ -6,6 +6,7 @@ from typing import Optional
 import httpx
 from fastapi import Request
 from fastapi.responses import JSONResponse
+from models.common import City, Country, State
 from models.user import User
 
 from sqlalchemy import delete, select ,and_, or_
@@ -24,9 +25,6 @@ from utils.web.auth import cache_get, cache_set, cache_delete, generate_tokens, 
 from helpers.response_helper import send_error_response, send_json_response
 from models.job import (
     Application,
-    City,
-    Country,
-    Department,
     Education,
     Job,
     JobGoodToHaveSkill,
@@ -39,7 +37,6 @@ from models.job import (
     Role,
     SalaryMarket,
     Skill,
-    State,
 )
 from schemas.web.career_listing_schemas import (
     STATUS_WORKFLOW,
@@ -961,7 +958,7 @@ async def toggle_top_application(request: Request, schema: ManageApplicationSche
 
         application.is_top_application = not application.is_top_application
         await db.flush()
-        return send_json_response(200, "Top application updated", data={"is_top_application": app.is_top_application})
+        return send_json_response(200, "Top application updated", data={"is_top_application": application.is_top_application})
     except Exception:
         return send_error_response(request, 500, "Internal server error")
 
@@ -1136,7 +1133,7 @@ async def send_email_otp(request: Request, schema: EmailOtpSchema, db: AsyncSess
         otp = str(random.randint(100000, 999999))
         user_id = request.state.user.user_id
         await cache_set(f"email_otp_{user_id}", {"otp": otp, "new_email": schema.new_email}, ttl=300)
-        await send_mail_async(
+        await send_email_otp(
             subject="Your Email Verification Code",
             body=f"Your verification code is: {otp}",
             to=[schema.new_email],

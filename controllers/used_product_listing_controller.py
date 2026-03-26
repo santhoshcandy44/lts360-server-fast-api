@@ -5,10 +5,12 @@ from PIL import Image
 
 from fastapi import Request
 
+from models.common import Country, State
 from schemas.used_product_listing_schemas import (
     GuestGetUsedProductListingsSchema,
 
     GetUsedProductListingsSchema,
+    PublishUsedProductListingStateOptionsSchema,
     UsedProductListingIdParam,
     GetUserProfileUsedProductListingsSchema,
     GetUsedProductListingsByUserIdSchema,
@@ -101,8 +103,18 @@ def _used_product_listing_detail_response(
                 "description":             used_product_listing.description,
                 "price":                   float(used_product_listing.price),
                 "price_unit":              used_product_listing.price_unit,
-                "country":                 used_product_listing.country,
-                "state":                   used_product_listing.state,
+
+                "country": {
+                    "country_id":   used_product_listing.country.id,
+                    "name": used_product_listing.country.name
+                },
+
+                "state": {
+                    "country_id":   used_product_listing.state.country_id,
+                    "state_id":   used_product_listing.state.id,
+                    "name": used_product_listing.state.name
+                },
+
                 "slug":                    f"{BASE_URL}/used-used_product_listing/{used_product_listing.short_code}",
                 "is_bookmarked":   is_bookmarked,
                 "distance":        distance,
@@ -115,7 +127,7 @@ def _used_product_listing_detail_response(
                         "size":      img.size,
                         "format":    img.format,
                     }
-                    for img in sorted(images, key=lambda x: x.created_at, reverse=True)
+                    for img in sorted(used_product_listing.images, key=lambda x: x.created_at, reverse=True)
                 ],
                 "location": {
                     "geo":           used_product_listing.location.geo,
@@ -134,8 +146,18 @@ def _used_product_listing_summary_response(
                 "description":             used_product_listing.description,
                 "price":                   float(used_product_listing.price),
                 "price_unit":              used_product_listing.price_unit,
-                "country":                 used_product_listing.country,
-                "state":                   used_product_listing.state,
+                
+                "country": {
+                    "country_id":   used_product_listing.country.id,
+                    "name": used_product_listing.country.name
+                },
+
+                "state": {
+                    "country_id":   used_product_listing.state.country_id,
+                    "state_id":   used_product_listing.state.id,
+                    "name": used_product_listing.state.name
+                },
+
                 "status":                  used_product_listing.status,
                 "slug":                    f"{BASE_URL}/used-used_product_listing/{used_product_listing.short_code}",
                 "is_bookmarked":   is_bookmarked,
@@ -149,14 +171,14 @@ def _used_product_listing_summary_response(
                         "size":      img.size,
                         "format":    img.format,
                     }
-                    for img in sorted(images, key=lambda x: x.created_at, reverse=True)
+                    for img in sorted(used_product_listing.images, key=lambda x: x.created_at, reverse=True)
                 ],
                 "location": {
-                    "longitude":     float(location.longitude),
-                    "latitude":      float(location.latitude),
-                    "geo":           location.geo,
-                    "location_type": location.location_type,
-                } if location else None
+                    "longitude":     float(used_product_listing.location.longitude),
+                    "latitude":      float(used_product_listing.location.latitude),
+                    "geo":           used_product_listing.location.geo,
+                    "location_type": used_product_listing.location.location_type,
+                } if used_product_listing.location else None
     }
 
 def _published_used_product_listing_response(
@@ -168,8 +190,18 @@ def _published_used_product_listing_response(
         "description":             used_product_listing.description,
         "price":                   float(used_product_listing.price),
         "price_unit":              used_product_listing.price_unit,
-        "country":                 used_product_listing.country,
-        "state":                   used_product_listing.state,
+   
+        "country": {
+                    "country_id":   used_product_listing.country.id,
+                    "name": used_product_listing.country.name
+                },
+
+        "state": {
+                    "country_id":   used_product_listing.state.country_id,
+                    "state_id":   used_product_listing.state.id,
+                    "name": used_product_listing.state.name
+                },
+
         "status":                  used_product_listing.status,
         "slug":                    f"{BASE_URL}/used-used_product_listing/{used_product_listing.short_code}",
         "images": [
@@ -753,3 +785,37 @@ async def used_product_listings_search_suggestions(request: Request, schema:Used
         return send_json_response(200, "Suggestions retrieved", data=[{"search_term": r.search_term} for r in result])
     except Exception:
         return send_error_response(request, 500, "Internal server error")
+    
+async def get_publish_countries_options(request: Request, db: AsyncSession):
+    try:
+        q      = select(Country).order_by(Country.name)
+        result = await db.execute(q)
+        countries = result.scalars().all()
+        return send_json_response(200, "Countries fetched", data=[
+            {"id": c.id, "name": c.name}
+            for c in countries
+        ])
+    except Exception as e:
+        return send_error_response(request, 500, "Internal server error")
+
+async def get_publish_states_options(
+    request: Request,
+    schema:  PublishUsedProductListingStateOptionsSchema,
+    db:      AsyncSession,
+):
+    try:
+        q = select(State).where(State.country_id == schema.country_id)
+
+        if schema.search:
+            q = q.where(State.name.ilike(f"%{schema.search}%"))
+
+        q = q.order_by(State.name).limit(50)
+
+        result = await db.execute(q)
+        states = result.scalars().all()
+        return send_json_response(200, "States fetched", data=[
+            {"id": s.id, "name": s.name}
+            for s in states
+        ])
+    except Exception as e:
+        return send_error_response(request, 500, "Internal server error")    

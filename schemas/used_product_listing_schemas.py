@@ -235,6 +235,15 @@ async def create_or_update_used_product_listing_form(
     except ValidationError as e:
         raise RequestValidationError(e.errors()) 
     
+class PublishUsedProductListingStateOptionsSchema(BaseModel):
+    country_id: int
+
+    @field_validator("country_id")
+    def validate_country_id(cls, v):
+        if v <= 0:
+            raise ValueError("Invalid country id format")
+        return v
+   
 class UsedProductListingsSearchSuggestionsSchema(BaseModel):
     query: str
 

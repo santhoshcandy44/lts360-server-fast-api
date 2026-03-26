@@ -7,6 +7,7 @@ import random
 from sqlmodel import SQLModel, Field , Relationship
 from sqlalchemy import Column, Integer, BigInteger, Numeric, ForeignKey, Enum as SAEnum, event, Index
 from sqlalchemy.orm import Session
+from sqlalchemy.dialects.mysql import MEDIUMINT
 
 class Service(SQLModel, table=True):
     __tablename__ = "services"
@@ -25,7 +26,17 @@ class Service(SQLModel, table=True):
     title:             str           = Field(max_length=255)
     short_description: str           = Field(max_length=500)
     long_description:  str           = Field()
-    industry:          int           = Field(sa_column=Column(Integer, ForeignKey("service_industries.industry_id", ondelete="CASCADE"), nullable=False, index=True))
+
+    industry_id: Optional[int] = Field(
+        default=None,
+        sa_column=Column(
+            MEDIUMINT(unsigned=True),
+            ForeignKey("service_industries.industry_id", ondelete="RESTRICT"),
+            nullable=False,
+            index=True
+        )
+    )
+
     status:            str           = Field(
                                            sa_column=Column(
                                                SAEnum("Active", "In-Review", "Rejected", "Suspended", name="service_status"),
@@ -34,8 +45,10 @@ class Service(SQLModel, table=True):
                                            )
                                        )
     short_code:        str           = Field()
-    country:           str           = Field(max_length=255)
-    state:             str           = Field(max_length=255)
+   
+    country_id:   int = Field(default=None, sa_column=Column(MEDIUMINT(unsigned=True), ForeignKey("countries.id", ondelete="RESTRICT"), nullable=False))
+    state_id:   int = Field(default=None, sa_column=Column(MEDIUMINT(unsigned=True), ForeignKey("states.id", ondelete="RESTRICT"), nullable=False))
+
     created_by:        int           = Field(sa_column=Column(BigInteger, ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False, index=True))
     created_at:        datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at:        datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
@@ -67,6 +80,18 @@ class Service(SQLModel, table=True):
 
     bookmarks: List["UserBookmarkService"] = Relationship(
         back_populates="service",
+        sa_relationship_kwargs={"lazy": "selectin"}
+    )
+
+    industry: Optional["ServiceIndustry"] = Relationship(
+        sa_relationship_kwargs={"lazy": "selectin"}
+    )
+
+    country: Optional["Country"] = Relationship(
+        sa_relationship_kwargs={"lazy": "selectin"}
+    )
+    
+    state: Optional["State"] = Relationship(
         sa_relationship_kwargs={"lazy": "selectin"}
     )
  

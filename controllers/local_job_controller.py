@@ -7,6 +7,7 @@ from PIL import Image
 from fastapi import Request
 
 from kafka.notification_service_producer import send_local_job_applicant_applied_notification_to_kafka
+from models.common import Country, State
 from schemas.local_job_schemas import (
     GuestGetLocalJobsSchema,
 
@@ -17,6 +18,7 @@ from schemas.local_job_schemas import (
     GetPublishedLocalJobsSchema,
     GetLocalJobApplicationsSchema,
     LocalJobApplicationSchema,
+    PublishLocalJobStateOptionsSchema,
     
     SearchSuggestionsSchema
 )
@@ -114,8 +116,18 @@ def _local_job_detail_response(
             "salary_unit":     local_job.salary_unit,
             "salary_min":      local_job.salary_min,
             "salary_max":      local_job.salary_max,
-            "country":         local_job.country,
-            "state":           local_job.state,
+
+            "country": {
+                "country_id":   local_job.country.id,
+                "name": local_job.country.name
+            },
+
+            "state": {
+                "country_id":   local_job.state.country_id,
+                "state_id":   local_job.state.id,
+                "name": local_job.state.name
+            },
+
             "slug":            f"{BASE_URL}/local-jobs/{local_job.short_code}",
             "is_bookmarked":   is_bookmarked,
             "is_applied":      is_applied,
@@ -151,8 +163,18 @@ def _published_local_job_response(
             "salary_unit":     local_job.salary_unit,
             "salary_min":      local_job.salary_min,
             "salary_max":      local_job.salary_max,
-            "country":         local_job.country,
-            "state":           local_job.state,
+
+            "country": {
+                "country_id":   local_job.country.id,
+                "name": local_job.country.name
+            },
+
+            "state": {
+                "country_id":   local_job.state.country_id,
+                "state_id":   local_job.state.id,
+                "name": local_job.state.name
+            },
+
             "status":          local_job.status,
             "slug":            f"{BASE_URL}/local-jobs/{local_job.short_code}",
             "images": [
@@ -816,3 +838,37 @@ async def local_jobs_search_suggestions(request: Request, schema: SearchSuggesti
         return send_json_response(200, "Suggestions retrieved", data=[{"search_term": r.search_term} for r in result.scalars()])
     except Exception:
         return send_error_response(request, 500, "Internal server error")
+    
+async def get_publish_countries_options(request: Request, db: AsyncSession):
+    try:
+        q      = select(Country).order_by(Country.name)
+        result = await db.execute(q)
+        countries = result.scalars().all()
+        return send_json_response(200, "Countries fetched", data=[
+            {"id": c.id, "name": c.name}
+            for c in countries
+        ])
+    except Exception as e:
+        return send_error_response(request, 500, "Internal server error")
+
+async def get_publish_states_options(
+    request: Request,
+    schema:  PublishLocalJobStateOptionsSchema,
+    db:      AsyncSession,
+):
+    try:
+        q = select(State).where(State.country_id == schema.country_id)
+
+        if schema.search:
+            q = q.where(State.name.ilike(f"%{schema.search}%"))
+
+        q = q.order_by(State.name).limit(50)
+
+        result = await db.execute(q)
+        states = result.scalars().all()
+        return send_json_response(200, "States fetched", data=[
+            {"id": s.id, "name": s.name}
+            for s in states
+        ])
+    except Exception as e:
+        return send_error_response(request, 500, "Internal server error")       

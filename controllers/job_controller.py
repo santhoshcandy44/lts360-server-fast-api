@@ -27,13 +27,8 @@ from models.job import (
     ApplicantProfileResume,
     ApplicantProfileCertificate,
     Application,
-    City,
     Job,
-    JobGoodToHaveSkill,
     JobIndustry,
-    JobMustHaveSkill,
-    Organization,
-    RecruiterProfile,
     UserJobIndustry,
     UserBookmarkJob,
     Role,
@@ -294,15 +289,31 @@ def _job_summary_response(
             "logo": job.organization.logo,
             "address": job.organization.name,
             "website": job.organization.website,
-            "country": job.organization.country.name,
-            "state": job.organization.state.name,
-            "city": job.organization.city.name,
+            
+            "country": {
+                "country_id":   job.organization.country.id,
+                "name": job.organization.country.name
+            },
+
+            "state": {
+                "country_id":   job.organization.state.country_id,
+                "state_id":   job.organization.state.id,
+                "name": job.organization.state.name
+            },
+
+            "city": {
+                "country_id":   job.organization.city.country_id,
+                "state_id":   job.organization.city.state_id,
+                "city_id":   job.organization.city.id,
+                "name": job.organization.city.name
+            },
+
             "postal_code": job.organization.postal_code
         },
        "job": {
             "job_id":          job.job_id,
             "title":           job.title,
-            "work_mode":       job.work_mode,
+            "work_mode":       job.work_mode_display,
             "location":        job.city.name,
             "experience":      job.experience_display,
             "salary_currency_type":      job.salary_currency_type_display,
@@ -342,15 +353,31 @@ def _job_detail_response(
             "logo": job.organization.logo,
             "address": job.organization.name,
             "website": job.organization.website,
-            "country": job.organization.country.name,
-            "state": job.organization.state.name,
-            "city": job.organization.city.name,
+
+            "country": {
+                "country_id":   job.organization.country.id,
+                "name": job.organization.country.name
+            },
+
+            "state": {
+                "country_id":   job.organization.state.country_id,
+                "state_id":   job.organization.state.id,
+                "name": job.organization.state.name
+            },
+
+            "city": {
+                "country_id":   job.organization.city.country_id,
+                "state_id":   job.organization.city.state_id,
+                "city_id":   job.organization.city.id,
+                "name": job.organization.city.name
+            },
+
             "postal_code": job.organization.postal_code
         },
        "job": {
             "job_id":          job.job_id,
             "title":           job.title,
-            "work_mode":       job.work_mode,
+            "work_mode":       job.work_mode_display,
             "location":        job.city.name,
             "description":        job.description,
             "industry":        job.industry.name,
@@ -448,7 +475,7 @@ async def _query_jobs(
     if has_loc:
         q = q.join(
             City,
-            City.job_id == City.job_id
+            Job.location_id == City.id
         )
 
     if query:
@@ -657,6 +684,10 @@ async def get_job_listings(request: Request, schema: GetJobsSchema, db: AsyncSes
 
         return send_json_response(200, "Jobs retrieved", data=data)
     except Exception:
+        import traceback
+        import sys
+        traceback.print_exc(file=sys.stderr)
+        sys.stderr.flush()
         return send_error_response(request, 500, "Internal server error")
     
 async def get_job_by_job_id(request: Request, schema: JobIdSchema, db: AsyncSession):
@@ -714,10 +745,6 @@ async def get_job_by_job_id(request: Request, schema: JobIdSchema, db: AsyncSess
         )
 
     except Exception:
-        import traceback
-        import sys
-        traceback.print_exc(file=sys.stderr)
-        sys.stderr.flush()
         return send_error_response(request, 500, "Internal server error")
     
 #Apply & Bookmark 

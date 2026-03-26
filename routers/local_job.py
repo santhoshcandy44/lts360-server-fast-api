@@ -14,6 +14,7 @@ from schemas.local_job_schemas import (
     GetPublishedLocalJobsSchema,
     GetLocalJobApplicationsSchema,
     LocalJobApplicationSchema,
+    PublishLocalJobStateOptionsSchema,
     
     SearchSuggestionsSchema,
     create_or_update_local_job_form
@@ -77,6 +78,24 @@ async def get_publishd_local_jobs(
     _:       None = Depends(authenticate_token),
 ):
     return await local_job_controller.get_published_local_jobs(request, schema, db)
+
+@router.get("/publish/location/countries/options")
+async def get_publish_countries_options(
+    request: Request,
+    db:      AsyncSession = Depends(get_db),
+    _:       None = Depends(authenticate_token),
+):
+    return await local_job_controller.get_publish_countries_options(request, db)
+
+
+@router.get("/publish/location/states/options")
+async def get_publish_states_options(
+    request: Request,
+    schema:  PublishLocalJobStateOptionsSchema = Depends(),
+    db:      AsyncSession = Depends(get_db),
+    _:       None = Depends(authenticate_token),
+):
+    return await local_job_controller.get_publish_states_options(request, schema, db)
 
 @router.get("/{local_job_id}")                   
 async def get_local_job(

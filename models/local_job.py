@@ -7,6 +7,7 @@ import string
 from sqlmodel import SQLModel, Field, Relationship
 from sqlalchemy import Column, BigInteger, ForeignKey, Numeric, Enum as SAEnum, event, Index
 from sqlalchemy.orm import Session
+from sqlalchemy.dialects.mysql import MEDIUMINT
 
 class LocalJob(SQLModel, table=True):
     __tablename__ = "local_jobs"
@@ -38,8 +39,11 @@ class LocalJob(SQLModel, table=True):
                                           )
                                       )
     short_code:       str           = Field()
-    country:          str           = Field(max_length=255)
-    state:            str           = Field(max_length=255)
+
+        
+    country_id:   int = Field(default=None, sa_column=Column(MEDIUMINT(unsigned=True), ForeignKey("countries.id", ondelete="RESTRICT"), nullable=False))
+    state_id:   int = Field(default=None, sa_column=Column(MEDIUMINT(unsigned=True), ForeignKey("states.id", ondelete="RESTRICT"), nullable=False))
+
     created_by:       int           = Field(sa_column=Column(BigInteger, ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False))
     created_at:       datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at:       datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
@@ -63,6 +67,14 @@ class LocalJob(SQLModel, table=True):
 
     bookmarks: List["UserBookmarkLocalJob"] = Relationship(
         back_populates="local_job",
+        sa_relationship_kwargs={"lazy": "selectin"}
+    )
+
+    country: Optional["Country"] = Relationship(
+        sa_relationship_kwargs={"lazy": "selectin"}
+    )
+    
+    state: Optional["State"] = Relationship(
         sa_relationship_kwargs={"lazy": "selectin"}
     )
 

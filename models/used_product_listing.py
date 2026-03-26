@@ -8,6 +8,7 @@ from typing import List, Optional
 from sqlmodel import SQLModel, Field, Relationship
 from sqlalchemy import Column, BigInteger, ForeignKey, Numeric, Enum as SAEnum, Index, event
 from sqlalchemy.orm import Session
+from sqlalchemy.dialects.mysql import MEDIUMINT
 
 class UsedProductListing(SQLModel, table=True):
     __tablename__ = "used_product_listings"
@@ -34,8 +35,10 @@ class UsedProductListing(SQLModel, table=True):
                                                   )
                                               )
     short_code:               str           = Field()
-    country:                  str           = Field(max_length=255)
-    state:                    str           = Field(max_length=255)
+    
+    country_id:   int = Field(default=None, sa_column=Column(MEDIUMINT(unsigned=True), ForeignKey("countries.id", ondelete="RESTRICT"), nullable=False))
+    state_id:   int = Field(default=None, sa_column=Column(MEDIUMINT(unsigned=True), ForeignKey("states.id", ondelete="RESTRICT"), nullable=False))
+
     created_by:               int           = Field(sa_column=Column(BigInteger, ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False, index=True))
     created_at:               datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at:               datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
@@ -57,6 +60,14 @@ class UsedProductListing(SQLModel, table=True):
 
     bookmarks: List["UserBookmarkUsedProductListing"] = Relationship(
         back_populates="used_product_listing",
+        sa_relationship_kwargs={"lazy": "selectin"}
+    )
+
+    country: Optional["Country"] = Relationship(
+        sa_relationship_kwargs={"lazy": "selectin"}
+    )
+    
+    state: Optional["State"] = Relationship(
         sa_relationship_kwargs={"lazy": "selectin"}
     )
 

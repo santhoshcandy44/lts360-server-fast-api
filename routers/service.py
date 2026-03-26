@@ -9,6 +9,7 @@ from schemas.service_schemas import (
     GuestGetServicesSchema,
 
     GetServicesSchema,
+    PublishServiceStateOptionsSchema,
     ServiceIdSchema,
     GetUserProfileServicesSchema,
     GetServicesByUserIdSchema,
@@ -165,6 +166,25 @@ async def update_industries(
     _:       None = Depends(authenticate_token),
 ):
     return await service_controller.update_industries(request, schema, db)
+
+
+@router.get("/publish/location/countries/options")
+async def get_publish_countries_options(
+    request: Request,
+    db:      AsyncSession = Depends(get_db),
+    _:       None = Depends(authenticate_token),
+):
+    return await service_controller.get_publish_countries_options(request, db)
+
+
+@router.get("/publish/location/states/options")
+async def get_publish_states_options(
+    request: Request,
+    schema:  PublishServiceStateOptionsSchema = Depends(),
+    db:      AsyncSession = Depends(get_db),
+    _:       None = Depends(authenticate_token),
+):
+    return await service_controller.get_publish_states_options(request, schema, db)
 
 @router.get("/{service_id}")
 async def get_service_by_service_id(

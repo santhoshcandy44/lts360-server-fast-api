@@ -254,59 +254,6 @@ class Skill(SQLModel, table=True):
     must_have_jobs:    List["JobMustHaveSkill"]    = Relationship(back_populates="skill", sa_relationship_kwargs={"lazy": "selectin"})
     good_to_have_jobs: List["JobGoodToHaveSkill"]  = Relationship(back_populates="skill", sa_relationship_kwargs={"lazy": "selectin"})
 
-class Country(SQLModel, table=True):
-    __tablename__ = "countries"
-    __table_args__ = {"extend_existing": True}
-
-    id:   int = Field(sa_column=Column(MEDIUMINT(unsigned=True), primary_key=True))
-    name: str = Field(max_length=100)
-    iso2: str = Field(max_length=2, sa_column=Column(String(2), unique=True))
-
-    organizations: List["Organization"] = Relationship(
-        back_populates="country",
-        sa_relationship_kwargs={"lazy": "selectin"},
-    )
-
-    settings: Optional["RecruiterSettings"] = Relationship(
-        back_populates="country",
-        sa_relationship_kwargs={"lazy": "selectin"},
-    )
-
-class State(SQLModel, table=True):
-    __tablename__ = "states"
-    __table_args__ = {"extend_existing": True}
-
-    id:         int = Field(sa_column=Column(MEDIUMINT(unsigned=True), primary_key=True))
-    name:       str = Field(max_length=100)
-    iso2:       str = Field(max_length=2, sa_column=Column(String(2), unique=True))
-    country_id: int = Field(sa_column=Column(MEDIUMINT(unsigned=True), nullable=False))
-
-    organizations: List["Organization"] = Relationship(
-        back_populates="state",
-        sa_relationship_kwargs={"lazy": "selectin"},
-    )
-
-class City(SQLModel, table=True):
-    __tablename__ = "cities"
-    __table_args__ = {"extend_existing": True}
-
-    id:         int = Field(sa_column=Column(MEDIUMINT(unsigned=True), primary_key=True))
-    name:       str = Field(max_length=100)
-    country_id: int = Field(sa_column=Column(MEDIUMINT(unsigned=True), nullable=False))
-    state_id:   int = Field(sa_column=Column(MEDIUMINT(unsigned=True), nullable=False))
-    latitude:      Decimal        = Field(sa_column=Column(Numeric(10, 8), nullable=False))
-    longitude:     Decimal        = Field(sa_column=Column(Numeric(11, 8), nullable=False))
-
-    jobs: List["Job"] = Relationship(
-        back_populates="city",
-        sa_relationship_kwargs={"lazy": "selectin"},
-    )
-
-    organizations: List["Organization"] = Relationship(
-        back_populates="city",
-        sa_relationship_kwargs={"lazy": "selectin"},
-    )
-
 CURRENCY_SYMBOLS = {
     "INR": "₹",
     "USD": "$",
@@ -329,6 +276,13 @@ HIGHLIGHTS_MAP = {
     "health":    {"type": "health",    "label": "Health",     "emoji": "🏥", "description": "Full medical plan"},
     "training":  {"type": "training",  "label": "Training",   "emoji": "🎓", "description": "Skill development"},
     "flexible":  {"type": "flexible",  "label": "Flexible",   "emoji": "⏰", "description": "Choose your schedule"},
+}
+
+WORK_MODE_DISPLAY = {
+    "remote":   "Remote",
+    "office":   "On-site",
+    "hybrid":   "Hybrid",
+    "flexible": "Flexible",
 }
 
 class Job(SQLModel, table=True):
@@ -403,7 +357,7 @@ class Job(SQLModel, table=True):
     updated_at:        datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     # Relationships
-    city:    Optional[City] = Relationship(back_populates="jobs",         sa_relationship_kwargs={"lazy": "selectin"})
+    city:    Optional["City"] = Relationship(back_populates="jobs",         sa_relationship_kwargs={"lazy": "selectin"})
 
     posted_by:    Optional[RecruiterProfile] = Relationship(back_populates="jobs",         sa_relationship_kwargs={"lazy": "selectin"})
     organization: Optional[Organization]     = Relationship(back_populates="jobs",         sa_relationship_kwargs={"lazy": "selectin"})
@@ -415,7 +369,7 @@ class Job(SQLModel, table=True):
     good_to_have_skills: List["JobGoodToHaveSkill"] = Relationship(back_populates="job",   sa_relationship_kwargs={"lazy": "selectin"})
     applications:        List["Application"]        = Relationship(back_populates="job",   sa_relationship_kwargs={"lazy": "selectin"})
     bookmarks:           List["UserBookmarkJob"]     = Relationship(back_populates="job",  sa_relationship_kwargs={"lazy": "selectin"})
-
+   
     @property
     def experience_display(self) -> str:
             if self.experience_type == "fresher":
@@ -465,6 +419,10 @@ class Job(SQLModel, table=True):
 
         return f"{symbol}{min_val:,} - {symbol}{max_val:,}"
 
+    @property
+    def work_mode_display(self) -> str:
+        return WORK_MODE_DISPLAY.get(self.employment_type, self.employment_type.replace("_", " ").title()) 
+    
     @property
     def employment_type_display(self) -> str:
         return EMPLOYMENT_TYPE_DISPLAY.get(self.employment_type, self.employment_type.replace("_", " ").title())    

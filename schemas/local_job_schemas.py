@@ -289,6 +289,15 @@ class LocalJobApplicationSchema(BaseModel):
             raise ValueError("Invalid application id")
         return v
 
+class PublishLocalJobStateOptionsSchema(BaseModel):
+    country_id: int
+
+    @field_validator("country_id")
+    def validate_country_id(cls, v):
+        if v <= 0:
+            raise ValueError("Invalid country id format")
+        return v
+
 class SearchSuggestionsSchema(BaseModel):
     query: str
 
@@ -302,3 +311,4 @@ class SearchSuggestionsSchema(BaseModel):
 
 MAX_IMAGE_SIZE    = 1 * 1024 * 1024  
 ALLOWED_TYPES     = ["image/jpeg", "image/png", "image/webp"]
+

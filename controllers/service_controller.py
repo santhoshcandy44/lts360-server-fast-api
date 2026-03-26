@@ -7,10 +7,12 @@ from PIL import Image
 
 from fastapi import Request
 
+from models.common import Country, State
 from schemas.service_schemas import (
     GuestGetServicesSchema,
 
     GetServicesSchema,
+    PublishServiceStateOptionsSchema,
     ServiceIdSchema,
     GetUserProfileServicesSchema,
     GetServicesByUserIdSchema,
@@ -25,7 +27,7 @@ from schemas.service_schemas import (
     UpdateServiceLocationSchema,
 
     ServiceSearchSuggestionsSchema,
-    UpdateIndustriesSchema,
+    UpdateIndustriesSchema
 )
 
 
@@ -95,7 +97,13 @@ def _user_service_summary_response(
             "service_id":        service.service_id,
             "title":             service.title,
             "short_description": service.short_description,
-            "industry":          service.industry,
+
+            "industry": {
+                "industry_id":   service.industry.industry_id,
+                "name": service.industry.name
+            },
+
+    
             "slug":              f"{BASE_URL}/service/{service.short_code}",
             "is_bookmarked":     is_bookmarked,
             "distance":          distance,
@@ -131,9 +139,23 @@ def _user_service_detail_response(
             "title":             service.title,
             "short_description": service.short_description,
             "long_description":  service.long_description,
-            "industry":          service.industry,
-            "country":           service.country,
-            "state":             service.state,
+
+            "industry": {
+                "industry_id":   service.industry.industry_id,
+                "name": service.industry.name
+            },
+
+            "country": {
+                "country_id":   service.country.id,
+                "name": service.country.name
+            },
+
+            "state": {
+                "country_id":   service.state.country_id,
+                "state_id":   service.state.id,
+                "name": service.state.name
+            },
+
             "slug":              f"{BASE_URL}/service/{service.short_code}",
             "is_bookmarked":     is_bookmarked,
             "distance":          distance,
@@ -164,7 +186,12 @@ def _service_summary_response(
             "service_id":        service.service_id,
             "title":             service.title,
             "short_description": service.short_description,
-            "industry":          service.industry,
+
+            "industry": {
+                "industry_id":   service.industry.industry_id,
+                "name": service.industry.name
+            },
+
             "slug":              f"{BASE_URL}/service/{service.short_code}",
             "is_bookmarked":     is_bookmarked,
             "thumbnail":         _parse_thumbnail(service.thumbnail),
@@ -186,8 +213,23 @@ def _published_service_response(
             "title":             service.title,
             "short_description": service.short_description,
             "long_description":  service.long_description,
-            "industry":          service.industry,
-            "country":           service.country,
+            
+            "industry": {
+                "industry_id":   service.industry.industry_id,
+                "name": service.industry.name
+            },
+
+            "country": {
+                "country_id":   service.country.id,
+                "name": service.country.name
+            },
+
+            "state": {
+                "country_id":   service.state.country_id,
+                "state_id":   service.state.id,
+                "name": service.state.name
+            },
+
             "state":             service.state,
             "status":            service.status,
             "slug":              f"{BASE_URL}/service/{service.short_code}",
@@ -754,8 +796,22 @@ async def update_service_info(
             "title":             service.title,
             "short_description": service.short_description,
             "long_description":  service.long_description,
-            "industry":          service.industry,
-            "country":           service.country,
+
+            "industry_id": {
+                "id":   service.industry.industry_id,
+                "name": service.industry.name
+            } if service.industry else None,
+            
+            "country_id": {
+                "id":   service.country.id,
+                "name": service.country.name
+            } if service.country else None,
+
+            "state_id": {
+                "id":   service.state.id,
+                "name": service.state.name
+            } if service.state else None,
+
             "status":            service.status,
         })
     except Exception:
@@ -1131,3 +1187,37 @@ async def update_industries(request: Request, schema: UpdateIndustriesSchema, db
     except Exception as e:
         return send_error_response(request, 500, "Internal server error")
         
+
+async def get_publish_countries_options(request: Request, db: AsyncSession):
+    try:
+        q      = select(Country).order_by(Country.name)
+        result = await db.execute(q)
+        countries = result.scalars().all()
+        return send_json_response(200, "Countries fetched", data=[
+            {"id": c.id, "name": c.name}
+            for c in countries
+        ])
+    except Exception as e:
+        return send_error_response(request, 500, "Internal server error")
+
+async def get_publish_states_options(
+    request: Request,
+    schema:  PublishServiceStateOptionsSchema,
+    db:      AsyncSession,
+):
+    try:
+        q = select(State).where(State.country_id == schema.country_id)
+
+        if schema.search:
+            q = q.where(State.name.ilike(f"%{schema.search}%"))
+
+        q = q.order_by(State.name).limit(50)
+
+        result = await db.execute(q)
+        states = result.scalars().all()
+        return send_json_response(200, "States fetched", data=[
+            {"id": s.id, "name": s.name}
+            for s in states
+        ])
+    except Exception as e:
+        return send_error_response(request, 500, "Internal server error")
