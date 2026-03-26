@@ -649,13 +649,35 @@ async def create_service(
         if not media_id:
             return send_error_response(request, 400, "Something went wrong")
         
+        country = await db.scalar(
+            select(Country).where(Country.id == schema.country)
+        )
+        if not country:
+            return send_error_response(request, 400, "Invalid country")
+
+        state = await db.scalar(
+            select(State).where(
+                State.id         == schema.state,
+                State.country_id == schema.country
+            )
+        )
+        
+        if not state:
+            return send_error_response(request, 400, "Invalid state")
+
+        industry = await db.scalar(
+            select(ServiceIndustry).where(ServiceIndustry.industry_id == schema.industry)
+        )
+        if not industry:
+            return send_error_response(request, 400, "Invalid industry")
+        
         service = Service(
             title             = schema.title,
             short_description = schema.short_description,
             long_description = schema.long_description,
-            industry         = schema.industry,
-            country          = schema.country,
-            state            = schema.state,
+            industry_id         = industry.industry_id,
+            country_id          = country.id,
+            state_id            = state.id,
             created_by       = user_id
             )
         db.add(service)
@@ -731,6 +753,10 @@ async def create_service(
         await db.refresh(service, attribute_names=[ "thumbnail", "images", "plans", "location", "owner"])    
         return send_json_response(200, "Service published", data=_published_service_response(service))
     except Exception:
+        import traceback
+        import sys
+        traceback.print_exc(file=sys.stderr)
+        sys.stderr.flush()
         await db.rollback() 
         for key in uploaded_keys:
             await delete_from_s3(key)
@@ -788,10 +814,16 @@ async def update_service_info(
         if not service:
             return send_error_response(request, 404, "Service not exist")
 
+        industry = await db.scalar(
+            select(ServiceIndustry).where(ServiceIndustry.industry_id == schema.industry_id)
+        )
+        if not industry:
+            return send_error_response(request, 400, "Invalid industry")
+
         service.title             = schema.title
         service.short_description = schema.short_description
         service.long_description  = schema.long_description
-        service.industry          = schema.industry
+        service.industry_id          = industry.industry_id
         db.add(service)
         await db.flush()
 

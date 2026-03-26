@@ -149,8 +149,8 @@ class CreateServiceSchema(BaseModel):
     short_description: str
     long_description:  str
     industry:          int
-    country:           str
-    state:             str
+    country:           int
+    state:             int
     plans:             str
     location:          str
     images:            List[UploadFile] = None
@@ -187,12 +187,6 @@ class CreateServiceSchema(BaseModel):
     def validate_industry(cls, v):
         if v <= 0:
             raise ValueError("Invalid industry")
-        return v
-
-    @field_validator("country")
-    def validate_country(cls, v):
-        if v not in VALID_COUNTRIES:
-            raise ValueError("Country must be a valid country (IN)")
         return v
 
     @field_validator("plans")
@@ -351,8 +345,8 @@ async def create_service_form(
     short_description: str                  = Form(...),
     long_description:  str                  = Form(...),
     industry:          int                  = Form(...),
-    country:           str                  = Form(...),
-    state:             str                  = Form(...),
+    country:           int                  = Form(...),
+    state:             int                  = Form(...),
     plans:             str                  = Form(...),
     location:          str                  = Form(...),
     images:            List[UploadFile]     = Form(...),

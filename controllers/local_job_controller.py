@@ -481,10 +481,6 @@ async def apply_local_job(request: Request, schema: LocalJobIdSchema, db: AsyncS
         )
         return send_json_response(200, "Applied successfully")
     except Exception:
-        import traceback
-        import sys
-        traceback.print_exc(file=sys.stderr)
-        sys.stderr.flush()
         return send_error_response(request, 500, "Internal server error")
 
 async def create_or_update_local_job(
@@ -513,6 +509,23 @@ async def create_or_update_local_job(
             )
         ) if schema.local_job_id else None
 
+
+        country = await db.scalar(
+            select(Country).where(Country.id == schema.country)
+        )
+        if not country:
+            return send_error_response(request, 400, "Invalid country")
+
+        state = await db.scalar(
+            select(State).where(
+                State.id         == schema.state,
+                State.country_id == schema.country
+            )
+        )
+        
+        if not state:
+            return send_error_response(request, 400, "Invalid state")
+
         if existing: 
             existing.title            = schema.title
             existing.description      = schema.description
@@ -522,8 +535,6 @@ async def create_or_update_local_job(
             existing.salary_unit      = schema.salary_unit
             existing.salary_min       = schema.salary_min
             existing.salary_max       = schema.salary_max
-            existing.country          = schema.country
-            existing.state            = schema.state
             existing.marital_statuses =  json.dumps(schema.marital_statuses)
             db.add(existing)
             local_job    = existing
@@ -538,8 +549,8 @@ async def create_or_update_local_job(
             salary_max       = schema.salary_max,
             salary_unit      = schema.salary_unit,
             marital_statuses = json.dumps(schema.marital_statuses),
-            country          = schema.country,
-            state            = schema.state,
+            country_id       = country.id,
+            state_id         = state.id,
             created_by       = user_id
             )
           db.add(new_job)
@@ -608,6 +619,10 @@ async def create_or_update_local_job(
         await db.refresh(local_job, attribute_names=["images", "location", "owner"])    
         return send_json_response(200, "Local job published", data=_published_local_job_response(local_job))
     except Exception:
+        import traceback
+        import sys
+        traceback.print_exc(file=sys.stderr)
+        sys.stderr.flush()
         await db.rollback() 
         for key in uploaded_keys:
             await delete_from_s3(key)

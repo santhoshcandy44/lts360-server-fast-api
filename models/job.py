@@ -136,7 +136,9 @@ class Organization(SQLModel, table=True):
     email:                str           = Field(max_length=254)
     address: str           = Field(max_length=255)
     website:              str           = Field(max_length=200)
+    
     country_id:           Optional[int] = Field(default=None, sa_column=Column(MEDIUMINT(unsigned=True), ForeignKey("countries.id", ondelete="SET NULL"), nullable=True))
+    
     state_id:             Optional[int] = Field(default=None, sa_column=Column(MEDIUMINT(unsigned=True), ForeignKey("states.id", ondelete="SET NULL"), nullable=True))
     location_id:          Optional[int] = Field(default=None, sa_column=Column(MEDIUMINT(unsigned=True), ForeignKey("cities.id", ondelete="SET NULL"), nullable=True))
     postal_code:          str           = Field(max_length=10)

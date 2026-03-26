@@ -5,15 +5,6 @@ import json
 from fastapi import File, Form, UploadFile
 
 VALID_MARITAL_STATUSES = ['ANY', 'SINGLE', 'MARRIED', 'UNMARRIED', 'WIDOWED']
-VALID_COUNTRIES        = ['IN']
-VALID_INDIAN_STATES    = [
-    "Andaman and Nicobar Islands", "Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar",
-    "Chandigarh", "Chhattisgarh", "Dadra and Nagar Haveli and Daman and Diu", "Delhi", "Goa",
-    "Gujarat", "Haryana", "Himachal Pradesh", "Jammu and Kashmir", "Jharkhand", "Karnataka",
-    "Kerala", "Ladakh", "Lakshadweep", "Madhya Pradesh", "Maharashtra", "Manipur", "Meghalaya",
-    "Mizoram", "Nagaland", "Odisha", "Puducherry", "Punjab", "Rajasthan", "Sikkim", "Tamil Nadu",
-    "Telangana", "Tripura", "Uttar Pradesh", "Uttarakhand", "West Bengal"
-]
 
 class GuestGetLocalJobsSchema(BaseModel):
     s:          Optional[str]   = None
@@ -87,8 +78,8 @@ class CreateOrUpdateLocalJobSchema(BaseModel):
     salary_max:       int
     salary_unit:      str
     marital_statuses: Optional[List[str]]        = []
-    country:          str
-    state:            str
+    country:          int
+    state:            int
     keep_image_ids:   Optional[List[int]]        = None
     location:         str
     images:           Optional[List[UploadFile]] = None
@@ -141,13 +132,7 @@ class CreateOrUpdateLocalJobSchema(BaseModel):
         if not all(s in VALID_MARITAL_STATUSES for s in v):
             raise ValueError("Invalid marital status")
         return v
-
-    @field_validator("country")
-    def validate_country(cls, v):
-        if v not in VALID_COUNTRIES:
-            raise ValueError("Invalid country")
-        return v
-
+    
     @field_validator("keep_image_ids")
     def validate_keep_image_ids(cls, v):
         if v is None:

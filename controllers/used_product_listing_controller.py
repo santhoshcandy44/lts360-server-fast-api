@@ -603,13 +603,29 @@ async def create_or_update_used_product_listing(
             )
         ) if schema.used_product_listing_id else None
 
+
+        country = await db.scalar(
+            select(Country).where(Country.id == schema.country)
+        )
+        if not country:
+            return send_error_response(request, 400, "Invalid country")
+
+        state = await db.scalar(
+            select(State).where(
+                State.id         == schema.state,
+                State.country_id == schema.country
+            )
+        )
+        
+        if not state:
+            return send_error_response(request, 400, "Invalid state")
+        
+
         if existing: 
             existing.name             = schema.name
             existing.description      = schema.description
             existing.price_unit       = schema.price_unit
             existing.price            = schema.price
-            existing.country          = schema.country
-            existing.state            = schema.state
             db.add(existing)
             used_product_listing    = existing
         else:
@@ -618,8 +634,8 @@ async def create_or_update_used_product_listing(
             description      = schema.description,
             price_unit       = schema.price_unit,
             price            = schema.price,
-            country          = schema.country,
-            state            = schema.state,
+            country_id          = country.id,
+            state_id           = state.id,
             created_by       = user_id
             )
           db.add(new_product)
@@ -691,7 +707,6 @@ async def create_or_update_used_product_listing(
         await db.refresh(used_product_listing, attribute_names=["images", "location", "owner"])    
         return send_json_response(200, "Used product listing published", data=_published_used_product_listing_response(used_product_listing))
     except Exception:
-        await db.rollback() 
         for key in uploaded_keys:
             await delete_from_s3(key)
         return send_error_response(request, 500, "Internal server error")

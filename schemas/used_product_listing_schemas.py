@@ -122,8 +122,8 @@ class CreateOrUpdateUsedProductListingSchema(BaseModel):
     used_product_listing_id: int
     name:                    str
     description:             str
-    country:                 str
-    state:                   str
+    country:                 int
+    state:                   int
     keep_image_ids:          Optional[List[int]] = None
     price:                   float
     price_unit:              Literal["INR", "USD"]
@@ -146,12 +146,6 @@ class CreateOrUpdateUsedProductListingSchema(BaseModel):
             raise ValueError("Description is required")
         if not 1 <= len(v) <= 5000:
             raise ValueError("Description must be between 1 and 5000 characters long")
-        return v
-
-    @field_validator("country")
-    def validate_country(cls, v):
-        if v not in VALID_COUNTRIES:
-            raise ValueError("Invalid country")
         return v
 
     @field_validator("price")
