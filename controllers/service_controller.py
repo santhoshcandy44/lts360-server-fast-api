@@ -383,7 +383,7 @@ async def _query_services(
         ) > 0)
 
     if len(industries) > 0:
-        q = q.where(Service.industry.in_(industries))     
+        q = q.where(Service.industry_id.in_(industries))     
 
     if payload:
         if has_loc and query:
@@ -505,6 +505,10 @@ async def get_services(request: Request, schema: GetServicesSchema, db: AsyncSes
         data = await _query_services(db=db, user_id=user_id, page_size=page_size, industries=user_industry_ids, query=s, user_lat=lat, user_lon=lon, next_token=next_token)
         return send_json_response(200, "Services retrived", data= data)
     except Exception:
+        import traceback
+        import sys
+        traceback.print_exc(file=sys.stderr)
+        sys.stderr.flush()
         return send_error_response(request, 500, "Internal server error")    
 
 async def get_service_by_service_id(request: Request, schema: ServiceIdSchema, db: AsyncSession):

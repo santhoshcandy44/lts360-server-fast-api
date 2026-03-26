@@ -8,6 +8,7 @@ from typing import Optional, List
 from PIL import Image
 
 from config import BASE_URL
+from models.common import City
 from models.user import UserLocation
 from schemas.job_schemas import ApplicantProfileSchema, GetJobsSchema, GetSavedJobsSchema, GuestGetJobsSchema, JobIdSchema, LocationSearchSuggestionsSchema, RoleSearchSuggestionsSchema, SkillSearchSuggestionsSchema, UpdateCertificatesSchema, UpdateEducationSchema, UpdateExperienceSchema, UpdateLanguagesSchema, UpdateNoExperienceSchema, UpdateProfessionalInfoSchema, UpdateResumeSchema, UpdateSkillsSchema
 from schemas.service_schemas import UpdateIndustriesSchema
@@ -314,7 +315,10 @@ def _job_summary_response(
             "job_id":          job.job_id,
             "title":           job.title,
             "work_mode":       job.work_mode_display,
-            "location":        job.city.name,
+            "location": {
+                "city_id":   job.city.id,
+                "name": job.city.name
+            },
             "experience":      job.experience_display,
             "salary_currency_type":      job.salary_currency_type_display,
             "salary":      job.salary_display,
@@ -378,7 +382,10 @@ def _job_detail_response(
             "job_id":          job.job_id,
             "title":           job.title,
             "work_mode":       job.work_mode_display,
-            "location":        job.city.name,
+            "location": {
+                "city_id":   job.city.id,
+                "name": job.city.name
+            },
             "description":        job.description,
             "industry":        job.industry.name,
             "education": job.education.name,

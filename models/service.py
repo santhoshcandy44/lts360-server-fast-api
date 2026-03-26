@@ -28,9 +28,8 @@ class Service(SQLModel, table=True):
     long_description:  str           = Field()
 
     industry_id: Optional[int] = Field(
-        default=None,
         sa_column=Column(
-            MEDIUMINT(unsigned=True),
+            Integer,
             ForeignKey("service_industries.industry_id", ondelete="RESTRICT"),
             nullable=False,
             index=True
