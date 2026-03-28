@@ -15,8 +15,8 @@ from schemas.used_product_listing_schemas import (
     GetUserProfileUsedProductListingsSchema,
     GetUsedProductListingsByUserIdSchema,
     GetPublishedUsedProductListingsSchema,
-    CreateOrUpdateUsedProductListingSchema,
-
+    CreateUsedProductListingSchema,
+    UpdateUsedProductListingSchema,
     UsedProductListingsSearchSuggestionsSchema
 )
 
@@ -580,9 +580,9 @@ async def get_used_product_listings_by_user_id(
     except Exception:
             return send_error_response(request, 500, "Internal server error")
 
-async def create_or_update_used_product_listing(
+async def create_used_product_listing(
     request: Request,
-    schema:  CreateOrUpdateUsedProductListingSchema,
+    schema:  CreateUsedProductListingSchema,
     db:      AsyncSession,
 ):
     images = schema.images or []
@@ -592,17 +592,6 @@ async def create_or_update_used_product_listing(
         media_id = await db.scalar(select(User.media_id).where(User.user_id == user_id))
         if not media_id:
             return send_error_response(request, 400, "Something went wrong")
-
-        existing = await db.scalar(
-            select(UsedProductListing)
-            .options(selectinload(UsedProductListing.images))   
-            .options(selectinload(UsedProductListing.location))
-            .where(
-                UsedProductListing.used_product_listing_id == schema.used_product_listing_id,
-                UsedProductListing.created_by   == user_id,
-            )
-        ) if schema.used_product_listing_id else None
-
 
         country = await db.scalar(
             select(Country).where(Country.id == schema.country)
@@ -620,27 +609,20 @@ async def create_or_update_used_product_listing(
         if not state:
             return send_error_response(request, 400, "Invalid state")
         
-
-        if existing: 
-            existing.name             = schema.name
-            existing.description      = schema.description
-            existing.price_unit       = schema.price_unit
-            existing.price            = schema.price
-            db.add(existing)
-            used_product_listing    = existing
-        else:
-          new_product = UsedProductListing(
-            name             = schema.name,
-            description      = schema.description,
-            price_unit       = schema.price_unit,
-            price            = schema.price,
-            country_id          = country.id,
-            state_id           = state.id,
-            created_by       = user_id
-            )
-          db.add(new_product)
-          await db.flush()
-          used_product_listing = await db.scalar(
+        new_product = UsedProductListing(
+                name             = schema.name,
+                description      = schema.description,
+                price_unit       = schema.price_unit,
+                price            = schema.price,
+                country_id          = country.id,
+                state_id           = state.id,
+                created_by       = user_id
+                )
+        db.add(new_product)
+        
+        await db.flush()
+        
+        used_product_listing = await db.scalar(
             select(UsedProductListing)
             .options(
                 selectinload(UsedProductListing.images),
@@ -711,6 +693,117 @@ async def create_or_update_used_product_listing(
             await delete_from_s3(key)
         return send_error_response(request, 500, "Internal server error")
 
+async def update_used_product_listing(
+    request: Request,
+    schema:  UpdateUsedProductListingSchema,
+    db:      AsyncSession,
+):
+    images = schema.images or []
+    uploaded_keys = []
+    try:
+        user_id  = request.state.user.user_id
+        media_id = await db.scalar(select(User.media_id).where(User.user_id == user_id))
+        if not media_id:
+            return send_error_response(request, 400, "Something went wrong")
+
+        existing = await db.scalar(
+            select(UsedProductListing)
+            .options(
+                selectinload(UsedProductListing.images),
+                selectinload(UsedProductListing.location),
+                selectinload(UsedProductListing.owner),
+            )
+            .where(
+                UsedProductListing.used_product_listing_id == schema.used_product_listing_id,
+                UsedProductListing.created_by == user_id,
+            )
+        )
+        if not existing:
+            return send_error_response(request, 404, "Invalid product listing")
+
+        country = await db.scalar(
+            select(Country).where(Country.id == schema.country)
+        )
+        if not country:
+            return send_error_response(request, 400, "Invalid country")
+
+        state = await db.scalar(
+            select(State).where(
+                State.id == schema.state,
+                State.country_id == schema.country
+            )
+        )
+        if not state:
+            return send_error_response(request, 400, "Invalid state")
+
+        existing.name        = schema.name
+        existing.description = schema.description
+        existing.price_unit  = schema.price_unit
+        existing.price       = schema.price
+        existing.country_id  = country.id
+        existing.state_id    = state.id
+        db.add(existing)
+
+        await db.flush()
+
+        keep_ids     = set(schema.keep_image_ids or [])
+        deleted_keys = []
+
+        for img in existing.images:
+            if img.id not in keep_ids:
+                deleted_keys.append(img.url)
+                await db.delete(img)
+
+        for image in images:
+            contents = await image.read()
+            key = f"media/{media_id}/used-product-listings/{existing.used_product_listing_id}/{uuid.uuid4()}-{image.filename}"
+            await upload_to_s3(contents, key, image.content_type)
+            uploaded_keys.append(key)
+
+            img = Image.open(io.BytesIO(contents))
+            width, height = img.size
+
+            db.add(UsedProductListingImage(
+                used_product_listing_id = existing.used_product_listing_id,
+                url    = key,
+                width  = width,
+                height = height,
+                size   = len(contents),
+                format = image.content_type or "",
+            ))
+
+        await db.flush()
+
+        location = schema.location
+        loc      = existing.location
+
+        if loc:
+            loc.latitude      = location["latitude"]
+            loc.longitude     = location["longitude"]
+            loc.geo           = location["geo"]
+            loc.location_type = location["location_type"]
+            db.add(loc)
+        else:
+            db.add(UsedProductListingLocation(
+                used_product_listing_id = existing.used_product_listing_id,
+                latitude      = location["latitude"],
+                longitude     = location["longitude"],
+                geo           = location["geo"],
+                location_type = location["location_type"],
+            ))
+
+        await db.flush()
+
+        for key in deleted_keys:
+            await delete_from_s3(key)
+
+        await db.refresh(existing, attribute_names=["images", "location", "owner"])
+        return send_json_response(200, "Used product listing updated", data=_published_used_product_listing_response(existing))
+    except Exception:
+        for key in uploaded_keys:
+            await delete_from_s3(key)
+        return send_error_response(request, 500, "Internal server error")
+
 async def get_published_used_product_listings(
     request: Request,
     schema: GetPublishedUsedProductListingsSchema,
@@ -764,6 +857,26 @@ async def delete_used_product_listing(request: Request, schema: UsedProductListi
     except Exception:
         return send_error_response(request, 500, "Internal server error")
 
+
+async def get_published_used_product_listing_by_used_product_listing_id(request: Request, schema: UsedProductListingIdParam, db: AsyncSession):
+    try:
+        used_product_listing = await db.scalar(
+            select(UsedProductListing)
+            .options(
+                selectinload(UsedProductListing.images),
+                selectinload(UsedProductListing.location),
+                selectinload(UsedProductListing.owner).selectinload(User.chat_info)
+            )
+            .where(UsedProductListing.used_product_listing_id == schema.used_product_listing_id)
+        )
+
+        if not used_product_listing:
+            return send_error_response(request, 404, "Used product listing not exist")
+        data=_published_used_product_listing_response(used_product_listing)
+        return send_json_response(200, "Used product listing retrived", data = data)
+    except Exception:
+        return send_error_response(request, 500, "Internal server error")
+
 async def bookmark_used_product_listing(request: Request, schema: UsedProductListingIdParam, db: AsyncSession):
     try:
         db.add(UserBookmarkUsedProductListing(user_id=request.state.user.user_id, used_product_listing_id=schema.used_product_listing_id))
@@ -800,7 +913,33 @@ async def used_product_listings_search_suggestions(request: Request, schema:Used
         return send_json_response(200, "Suggestions retrieved", data=[{"search_term": r.search_term} for r in result])
     except Exception:
         return send_error_response(request, 500, "Internal server error")
-    
+
+async def get_publish_meta_options(request: Request, db: AsyncSession):
+    try:
+        q = select(Country).order_by(Country.name)
+        result = await db.execute(q)
+        countries = result.scalars().all()
+
+        price_units = [
+            {"value": "INR", "name": "INR"},
+            {"value": "USD", "name": "USD"},
+        ]
+
+        return send_json_response(
+            200,
+            "Meta options fetched",
+            data={
+                "countries": [
+                    {"country_id": c.id, "name": c.name}
+                    for c in countries
+                ],
+                "price_units": price_units
+            }
+        )
+
+    except Exception as e:
+        return send_error_response(request, 500, "Internal server error")
+
 async def get_publish_countries_options(request: Request, db: AsyncSession):
     try:
         q      = select(Country).order_by(Country.name)

@@ -4,16 +4,6 @@ from typing import Annotated, Optional, List, Literal
 from fastapi import Form, UploadFile , File
 import json
 
-VALID_COUNTRIES     = ['IN', 'USA']
-VALID_INDIAN_STATES = [
-    "Andaman and Nicobar Islands", "Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar",
-    "Chandigarh", "Chhattisgarh", "Dadra and Nagar Haveli and Daman and Diu", "Delhi", "Goa",
-    "Gujarat", "Haryana", "Himachal Pradesh", "Jammu and Kashmir", "Jharkhand", "Karnataka",
-    "Kerala", "Ladakh", "Lakshadweep", "Madhya Pradesh", "Maharashtra", "Manipur", "Meghalaya",
-    "Mizoram", "Nagaland", "Odisha", "Puducherry", "Punjab", "Rajasthan", "Sikkim", "Tamil Nadu",
-    "Telangana", "Tripura", "Uttar Pradesh", "Uttarakhand", "West Bengal"
-]
-
 MAX_IMAGE_SIZE    = 1 * 1024 * 1024  
 ALLOWED_TYPES     = ["image/jpeg", "image/png", "image/webp"]
 
@@ -118,7 +108,98 @@ class GetPublishedUsedProductListingsSchema(BaseModel):
             raise ValueError("Page size must be a positive integer")
         return v
 
-class CreateOrUpdateUsedProductListingSchema(BaseModel):
+class CreateUsedProductListingSchema(BaseModel):
+    name:                    str
+    description:             str
+    country:                 int
+    state:                   int
+    price:                   float
+    price_unit:              Literal["INR", "USD"]
+    location:                str
+    images:                  Optional[List[UploadFile]] = None
+
+    @field_validator("name")
+    def validate_name(cls, v):
+        v = v.strip()
+        if not v:
+            raise ValueError("Name is required")
+        if not 1 <= len(v) <= 100:
+            raise ValueError("Name must be between 1 and 100 characters long")
+        return v
+
+    @field_validator("description")
+    def validate_description(cls, v):
+        v = v.strip()
+        if not v:
+            raise ValueError("Description is required")
+        if not 1 <= len(v) <= 5000:
+            raise ValueError("Description must be between 1 and 5000 characters long")
+        return v
+
+    @field_validator("price")
+    def validate_price(cls, v):
+        if v < 0:
+            raise ValueError("Price must be >= 0")
+        return v
+
+    @field_validator("location")
+    def validate_location(cls, v):
+        try:
+            parsed = json.loads(v)
+        except Exception:
+            raise ValueError("Location must be a valid JSON object")
+        if not isinstance(parsed, dict):
+            raise ValueError("Location must be a valid JSON object")
+        lat = parsed.get("latitude")
+        lng = parsed.get("longitude")
+        if lat is None or lng is None:
+            raise ValueError("Location must have latitude and longitude")
+        if not -90 <= float(lat) <= 90:
+            raise ValueError("Latitude must be between -90 and 90")
+        if not -180 <= float(lng) <= 180:
+            raise ValueError("Longitude must be between -180 and 180")
+        return parsed  
+    
+    @model_validator(mode="after")
+    def validate_images_and_keep(self):
+        has_new_images  = self.images and len(self.images) > 0
+        has_kept_images = self.keep_image_ids and len(self.keep_image_ids) > 0
+        if not has_new_images and not has_kept_images:
+            raise ValueError("At least 1 image is required")
+
+        if self.images:
+            for image in self.images:
+                if image.content_type not in ALLOWED_TYPES:
+                    raise ValueError(f"Invalid file type: {image.filename}")
+                if image.size and image.size > MAX_IMAGE_SIZE:
+                    raise ValueError(f"Image {image.filename} must be under 1MB")
+        return self
+
+async def create_used_product_listing_form(
+    name:                    str                  = Form(...),
+    description:             str                  = Form(...),
+    country:                 str                  = Form(...),
+    state:                   str                  = Form(...),
+    price:                   float                = Form(...),
+    price_unit:              str                  = Form(...),
+    location:                str                  = Form(...),
+    images:           Annotated[Optional[List[UploadFile]], File()] = None,
+) -> CreateUsedProductListingSchema:
+    try:
+        return CreateUsedProductListingSchema(
+            name                    = name,
+            description             = description,
+            country                 = country,
+            state                   = state,
+            price                   = price,
+            price_unit              = price_unit,
+            location                = location,
+            images                  = images
+        )
+    except ValidationError as e:
+        raise RequestValidationError(e.errors()) 
+    
+class UpdateUsedProductListingSchema(BaseModel):
     used_product_listing_id: int
     name:                    str
     description:             str
@@ -179,12 +260,6 @@ class CreateOrUpdateUsedProductListingSchema(BaseModel):
         if not -180 <= float(lng) <= 180:
             raise ValueError("Longitude must be between -180 and 180")
         return parsed  
-
-    @model_validator(mode="after")
-    def validate_state(self):
-        if self.country == "IN" and self.state not in VALID_INDIAN_STATES:
-            raise ValueError("Invalid state for India")
-        return self
     
     @model_validator(mode="after")
     def validate_images_and_keep(self):
@@ -201,7 +276,7 @@ class CreateOrUpdateUsedProductListingSchema(BaseModel):
                     raise ValueError(f"Image {image.filename} must be under 1MB")
         return self
 
-async def create_or_update_used_product_listing_form(
+async def update_used_product_listing_form(
     used_product_listing_id: int                  = Form(...),
     name:                    str                  = Form(...),
     description:             str                  = Form(...),
@@ -212,9 +287,9 @@ async def create_or_update_used_product_listing_form(
     location:                str                  = Form(...),
     keep_image_ids:          Optional[List[int]]  = Form(default=None),
     images:           Annotated[Optional[List[UploadFile]], File()] = None,
-) -> CreateOrUpdateUsedProductListingSchema:
+) -> UpdateUsedProductListingSchema:
     try:
-        return CreateOrUpdateUsedProductListingSchema(
+        return UpdateUsedProductListingSchema(
             used_product_listing_id = used_product_listing_id,
             name                    = name,
             description             = description,
