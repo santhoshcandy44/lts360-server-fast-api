@@ -5,19 +5,21 @@ from fastapi import APIRouter, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from schemas.local_job_schemas import (
+    CreateLocalJobSchema,
     GuestGetLocalJobsSchema,
 
     GetLocalJobsbSchema, 
     LocalJobIdSchema,
     
-    CreateOrUpdateLocalJobSchema,
     GetPublishedLocalJobsSchema,
     GetLocalJobApplicationsSchema,
     LocalJobApplicationSchema,
     PublishLocalJobStateOptionsSchema,
     
     SearchSuggestionsSchema,
-    create_or_update_local_job_form
+    UpdateLocalJobSchema,
+    create_local_job_form,
+    update_local_job_form
 )
 
 from controllers import local_job_controller
@@ -62,13 +64,22 @@ async def get_local_jobs(
     return await local_job_controller.get_local_jobs(request, schema, db)
 
 @router.post("")
-async def create_or_update_local_job(
+async def create_local_job(
     request: Request,
-    schema:  CreateOrUpdateLocalJobSchema = Depends(create_or_update_local_job_form),
+    schema:  CreateLocalJobSchema = Depends(create_local_job_form),
     db:      AsyncSession                 = Depends(get_db),
     _:       None                         = Depends(authenticate_token),
 ):
-    return await local_job_controller.create_or_update_local_job(request, schema, db)
+    return await local_job_controller.create_local_job(request, schema, db)
+
+@router.put("/{local_job_id}")
+async def update_local_job(
+    request: Request,
+    schema:    UpdateLocalJobSchema = Depends(update_local_job_form),
+    db:      AsyncSession = Depends(get_db),
+    _:       None = Depends(authenticate_token),
+):
+    return await local_job_controller.update_local_job(request, schema, db)  
 
 @router.get("/published")                               
 async def get_publishd_local_jobs(

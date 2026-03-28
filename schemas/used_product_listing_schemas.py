@@ -114,9 +114,9 @@ class CreateUsedProductListingSchema(BaseModel):
     country:                 int
     state:                   int
     price:                   float
-    price_unit:              Literal["INR", "USD"]
+    price_unit:              str
     location:                str
-    images:                  Optional[List[UploadFile]] = None
+    images:                  List[UploadFile]
 
     @field_validator("name")
     def validate_name(cls, v):
@@ -178,12 +178,12 @@ class CreateUsedProductListingSchema(BaseModel):
 async def create_used_product_listing_form(
     name:                    str                  = Form(...),
     description:             str                  = Form(...),
-    country:                 str                  = Form(...),
-    state:                   str                  = Form(...),
+    country:                 int                  = Form(...),
+    state:                   int                  = Form(...),
     price:                   float                = Form(...),
     price_unit:              str                  = Form(...),
     location:                str                  = Form(...),
-    images:           Annotated[Optional[List[UploadFile]], File()] = None,
+    images:                  List[UploadFile]    =  File(...),
 ) -> CreateUsedProductListingSchema:
     try:
         return CreateUsedProductListingSchema(
@@ -207,7 +207,7 @@ class UpdateUsedProductListingSchema(BaseModel):
     state:                   int
     keep_image_ids:          Optional[List[int]] = None
     price:                   float
-    price_unit:              Literal["INR", "USD"]
+    price_unit:              str
     location:                str
     images:                  Optional[List[UploadFile]] = None
 
@@ -277,7 +277,7 @@ class UpdateUsedProductListingSchema(BaseModel):
         return self
 
 async def update_used_product_listing_form(
-    used_product_listing_id: int                  = Form(...),
+    used_product_listing_id: int,
     name:                    str                  = Form(...),
     description:             str                  = Form(...),
     country:                 str                  = Form(...),

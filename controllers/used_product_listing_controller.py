@@ -36,6 +36,11 @@ from helpers.response_helper import send_json_response, send_error_response
 from utils.pagination.cursor import encode_cursor, decode_cursor
 from utils.aws_s3 import upload_to_s3, delete_from_s3, delete_directory_from_s3
 
+PRICE_UNITS = [
+    {"value": "INR", "name": "INR"},
+    {"value": "USD", "name": "USD"},
+]
+
 def _fmt_url(base, path):
     return f"{base}/{path}" if path else ""
 
@@ -60,7 +65,12 @@ def _user_used_product_listing_summary_response(
             "name":                    used_product_listing.name,
             "description":             used_product_listing.description,
             "price":                   float(used_product_listing.price),
-            "price_unit":              used_product_listing.price_unit,
+
+            "price_unit":              next(
+                        (pu for pu in PRICE_UNITS if pu["value"] == used_product_listing.price_unit),
+                        {"value": used_product_listing.price_unit, "name": used_product_listing.price_unit}
+                    ),
+            
             "slug":                    f"{BASE_URL}/used-used_product_listing/{used_product_listing.short_code}",
             "is_bookmarked":   is_bookmarked,
             "distance":        distance,
@@ -102,7 +112,11 @@ def _used_product_listing_detail_response(
                 "name":                    used_product_listing.name,
                 "description":             used_product_listing.description,
                 "price":                   float(used_product_listing.price),
-                "price_unit":              used_product_listing.price_unit,
+
+                "price_unit":              next(
+                                (pu for pu in PRICE_UNITS if pu["value"] == used_product_listing.price_unit),
+                                {"value": used_product_listing.price_unit, "name": used_product_listing.price_unit}
+                            ),
 
                 "country": {
                     "country_id":   used_product_listing.country.id,
@@ -145,8 +159,12 @@ def _used_product_listing_summary_response(
                 "name":                    used_product_listing.name,
                 "description":             used_product_listing.description,
                 "price":                   float(used_product_listing.price),
-                "price_unit":              used_product_listing.price_unit,
-                
+        
+                "price_unit":              next(
+                        (pu for pu in PRICE_UNITS if pu["value"] == used_product_listing.price_unit),
+                        {"value": used_product_listing.price_unit, "name": used_product_listing.price_unit}
+                    ),
+        
                 "country": {
                     "country_id":   used_product_listing.country.id,
                     "name": used_product_listing.country.name
@@ -189,8 +207,12 @@ def _published_used_product_listing_response(
         "name":                    used_product_listing.name,
         "description":             used_product_listing.description,
         "price":                   float(used_product_listing.price),
-        "price_unit":              used_product_listing.price_unit,
-   
+        
+        "price_unit":              next(
+                                (pu for pu in PRICE_UNITS if pu["value"] == used_product_listing.price_unit),
+                                {"value": used_product_listing.price_unit, "name": used_product_listing.price_unit}
+                            ),
+
         "country": {
                     "country_id":   used_product_listing.country.id,
                     "name": used_product_listing.country.name
@@ -689,6 +711,7 @@ async def create_used_product_listing(
         await db.refresh(used_product_listing, attribute_names=["images", "location", "owner"])    
         return send_json_response(200, "Used product listing published", data=_published_used_product_listing_response(used_product_listing))
     except Exception:
+        db.rollback()
         for key in uploaded_keys:
             await delete_from_s3(key)
         return send_error_response(request, 500, "Internal server error")
@@ -800,6 +823,7 @@ async def update_used_product_listing(
         await db.refresh(existing, attribute_names=["images", "location", "owner"])
         return send_json_response(200, "Used product listing updated", data=_published_used_product_listing_response(existing))
     except Exception:
+        db.rollback()
         for key in uploaded_keys:
             await delete_from_s3(key)
         return send_error_response(request, 500, "Internal server error")
@@ -857,7 +881,6 @@ async def delete_used_product_listing(request: Request, schema: UsedProductListi
     except Exception:
         return send_error_response(request, 500, "Internal server error")
 
-
 async def get_published_used_product_listing_by_used_product_listing_id(request: Request, schema: UsedProductListingIdParam, db: AsyncSession):
     try:
         used_product_listing = await db.scalar(
@@ -914,17 +937,14 @@ async def used_product_listings_search_suggestions(request: Request, schema:Used
     except Exception:
         return send_error_response(request, 500, "Internal server error")
 
+
 async def get_publish_meta_options(request: Request, db: AsyncSession):
     try:
         q = select(Country).order_by(Country.name)
         result = await db.execute(q)
         countries = result.scalars().all()
 
-        price_units = [
-            {"value": "INR", "name": "INR"},
-            {"value": "USD", "name": "USD"},
-        ]
-
+     
         return send_json_response(
             200,
             "Meta options fetched",
@@ -933,7 +953,7 @@ async def get_publish_meta_options(request: Request, db: AsyncSession):
                     {"country_id": c.id, "name": c.name}
                     for c in countries
                 ],
-                "price_units": price_units
+                "price_units": PRICE_UNITS
             }
         )
 

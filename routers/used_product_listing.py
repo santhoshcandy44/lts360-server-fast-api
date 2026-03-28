@@ -108,7 +108,7 @@ async def create_used_product_listing(
 ):
     return await used_product_listing_controller.create_used_product_listing(request, schema, db)
     
-@router.put("")
+@router.put("/{used_product_listing_id}")
 async def update_used_product_listing(
     request: Request,
     schema:    UpdateUsedProductListingSchema = Depends(update_used_product_listing_form),
