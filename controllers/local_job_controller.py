@@ -944,8 +944,6 @@ async def get_publish_meta_options(request: Request, db: AsyncSession):
         q = select(Country).order_by(Country.name)
         result = await db.execute(q)
         countries = result.scalars().all()
-
-     
         return send_json_response(
             200,
             "Meta options fetched",
@@ -958,7 +956,6 @@ async def get_publish_meta_options(request: Request, db: AsyncSession):
                 "salary_units": SALARY_UNITS
             }
         )
-
     except Exception:
         return send_error_response(request, 500, "Internal server error")
         

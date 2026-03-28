@@ -957,7 +957,7 @@ async def get_publish_meta_options(request: Request, db: AsyncSession):
             }
         )
 
-    except Exception as e:
+    except Exception:
         return send_error_response(request, 500, "Internal server error")
 
 async def get_publish_countries_options(request: Request, db: AsyncSession):
@@ -969,7 +969,7 @@ async def get_publish_countries_options(request: Request, db: AsyncSession):
             {"country_id": c.id, "name": c.name}
             for c in countries
         ])
-    except Exception as e:
+    except Exception:
         return send_error_response(request, 500, "Internal server error")
 
 async def get_publish_states_options(
@@ -987,5 +987,5 @@ async def get_publish_states_options(
             {"country_id": s.country_id, "state_id": s.id,  "name": s.name}
             for s in states
         ])
-    except Exception as e:
+    except Exception:
         return send_error_response(request, 500, "Internal server error")    

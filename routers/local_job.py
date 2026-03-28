@@ -90,6 +90,14 @@ async def get_publishd_local_jobs(
 ):
     return await local_job_controller.get_published_local_jobs(request, schema, db)
 
+@router.get("/publish/meta/options")
+async def get_publish_states_options(
+    request: Request,
+    db:      AsyncSession = Depends(get_db),
+    _:       None = Depends(authenticate_token),
+):
+    return await local_job_controller.get_publish_meta_options(request, db)
+
 @router.get("/publish/location/countries/options")
 async def get_publish_countries_options(
     request: Request,
