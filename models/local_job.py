@@ -30,7 +30,7 @@ class LocalJob(SQLModel, table=True):
     marital_statuses: str           = Field()
     salary_unit:      str           = Field(max_length=20)
     salary_min:       int           = Field()
-    salary_max:       int           = Field()
+    salary_max:       int           = Field(nullable=True)
     status:           str           = Field(
                                           sa_column=Column(
                                               SAEnum("Active", "In-Review", "Rejected", name="local_job_status"),
@@ -50,32 +50,55 @@ class LocalJob(SQLModel, table=True):
 
     images: List["LocalJobImage"] = Relationship(
         back_populates="local_job",
-        sa_relationship_kwargs={"lazy": "selectin"}
+        sa_relationship_kwargs={
+            "lazy": "selectin",
+            "cascade": "all, delete-orphan",
+            "passive_deletes": True
+        }        
     )
 
     location: Optional["LocalJobLocation"] = Relationship(
         back_populates="local_job",
-        sa_relationship_kwargs={"lazy": "selectin"}
+        sa_relationship_kwargs={
+            "lazy": "selectin",
+            "cascade": "all, delete-orphan",
+            "passive_deletes": True
+        }  
     )
 
     owner: Optional["User"] = Relationship(
         back_populates="local_jobs",
-        sa_relationship_kwargs={"lazy": "selectin"}
+        sa_relationship_kwargs={
+            "lazy": "selectin"
+        }  
     )
 
-    applications: List["LocalJobApplication"] = Relationship(back_populates="local_job", sa_relationship_kwargs={"lazy": "selectin"})
+    applications: List["LocalJobApplication"] = Relationship(back_populates="local_job", sa_relationship_kwargs={
+            "lazy": "selectin",
+            "cascade": "all, delete-orphan",
+            "passive_deletes": True
+        }
+    )
 
     bookmarks: List["UserBookmarkLocalJob"] = Relationship(
         back_populates="local_job",
-        sa_relationship_kwargs={"lazy": "selectin"}
+        sa_relationship_kwargs={
+            "lazy": "selectin",
+            "cascade": "all, delete-orphan",
+            "passive_deletes": True
+        }  
     )
 
     country: Optional["Country"] = Relationship(
-        sa_relationship_kwargs={"lazy": "selectin"}
+        sa_relationship_kwargs={
+            "lazy": "selectin"
+        }
     )
     
     state: Optional["State"] = Relationship(
-        sa_relationship_kwargs={"lazy": "selectin"}
+        sa_relationship_kwargs={
+            "lazy": "selectin"
+        }
     )
 
 class LocalJobImage(SQLModel, table=True):

@@ -47,6 +47,18 @@ from helpers.response_helper import send_json_response, send_error_response
 from utils.pagination.cursor import encode_cursor, decode_cursor
 from utils.aws_s3 import upload_to_s3, delete_from_s3, delete_directory_from_s3
 
+PRICE_UNITS = [
+    {"value": "INR", "name": "INR"},
+    {"value": "USD", "name": "USD"},
+]
+
+DURATION_UNITS = [
+    {"value": "HR", "name": "HR"},
+    {"value": "D", "name": "D"},
+    {"value": "W", "name": "W"},
+    {"value": "M", "name": "M"},
+]
+
 def _fmt_url(base, path):
     return f"{base}/{path}" if path else ""
 
@@ -1148,7 +1160,7 @@ async def services_search_suggestions(request: Request, schema: ServiceSearchSug
     except Exception:
         return send_error_response(request, 500, "Internal server error")
     
-async def get_industries(request: Request, db: AsyncSession):
+async def get_industries_options(request: Request, db: AsyncSession):
     try:
         result = await db.execute(select(ServiceIndustry))
         industries = result.scalars().all()
@@ -1222,8 +1234,34 @@ async def update_industries(request: Request, schema: UpdateIndustriesSchema, db
         ])
     except Exception as e:
         return send_error_response(request, 500, "Internal server error")
-        
 
+async def get_publish_meta_options(request: Request, db: AsyncSession):
+    try:
+        countries_result = await db.execute(select(Country).order_by(Country.name))
+        countries = countries_result.scalars().all()
+
+        industries_result = await db.execute(select(ServiceIndustry).order_by(ServiceIndustry.name))
+        industries = industries_result.scalars().all()
+
+        return send_json_response(
+            200,
+            "Meta options fetched",
+            data={
+                "countries": [
+                    {"country_id": c.id, "name": c.name}
+                    for c in countries
+                ],
+                "price_units": PRICE_UNITS,
+                "duration_units": DURATION_UNITS,
+                "industries": [
+                    {"industry_id": i.id, "name": i.name}
+                    for i in industries
+                ]
+            }
+        )
+    except Exception:
+        return send_error_response(request, 500, "Internal server error")
+            
 async def get_publish_countries_options(request: Request, db: AsyncSession):
     try:
         q      = select(Country).order_by(Country.name)

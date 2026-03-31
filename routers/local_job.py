@@ -90,6 +90,16 @@ async def get_publishd_local_jobs(
 ):
     return await local_job_controller.get_published_local_jobs(request, schema, db)
 
+
+@router.get("/published/{local_job_id}")                               
+async def get_publishd_local_jobs(
+    request: Request,
+    schema:  LocalJobIdSchema = Depends(),
+    db:      AsyncSession = Depends(get_db),
+    _:       None = Depends(authenticate_token),
+):
+    return await local_job_controller.get_published_local_job(request, schema, db)
+
 @router.get("/publish/meta/options")
 async def get_publish_states_options(
     request: Request,

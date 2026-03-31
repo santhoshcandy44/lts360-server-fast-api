@@ -125,7 +125,7 @@ async def create_service(
     return await service_controller.create_service(request, schema, db)
 
 @router.get("/published")
-async def get_me_services(
+async def get_published_services(
     request: Request,
     schema:  GetPublishedServicesSchema = Depends(),
     db:      AsyncSession = Depends(get_db),
@@ -148,7 +148,7 @@ async def get_industries_options(
     db:      AsyncSession = Depends(get_db),
     _:       None = Depends(authenticate_token),
 ):
-    return await service_controller.get_industries(request, db)
+    return await service_controller.get_industries_options(request, db)
 
 @router.get("/industries")
 async def get_industries(

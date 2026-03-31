@@ -41,6 +41,13 @@ PRICE_UNITS = [
     {"value": "USD", "name": "USD"},
 ]
 
+DURATION_UNITS = [
+    {"value": "HR", "name": "HR"},
+    {"value": "D", "name": "D"},
+    {"value": "W", "name": "W"},
+    {"value": "M", "name": "M"},
+]
+
 def _fmt_url(base, path):
     return f"{base}/{path}" if path else ""
 
@@ -936,8 +943,7 @@ async def used_product_listings_search_suggestions(request: Request, schema:Used
         return send_json_response(200, "Suggestions retrieved", data=[{"search_term": r.search_term} for r in result])
     except Exception:
         return send_error_response(request, 500, "Internal server error")
-
-
+    
 async def get_publish_meta_options(request: Request, db: AsyncSession):
     try:
         q = select(Country).order_by(Country.name)

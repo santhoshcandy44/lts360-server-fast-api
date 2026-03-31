@@ -4,7 +4,10 @@ from typing import Optional, List
 import json
 from fastapi import File, Form, UploadFile
 
-VALID_MARITAL_STATUSES = ['ANY', 'SINGLE', 'MARRIED', 'UNMARRIED', 'WIDOWED']
+MARITAL_STATUS_OPTIONS = [
+    {"value": "single", "name": "Single"},
+    {"value": "married", "name": "Married"},
+]
 
 class GuestGetLocalJobsSchema(BaseModel):
     s:          Optional[str]   = None
@@ -74,13 +77,13 @@ class CreateLocalJobSchema(BaseModel):
     age_min:          int
     age_max:          int
     salary_min:       int
-    salary_max:       int
     salary_unit:      str
     marital_statuses: List[str]        
     country:          int
     state:            int
     location:         str
     images:           List[UploadFile] 
+    salary_max:       Optional[int] = None
 
     @field_validator("title")
     def validate_title(cls, v):
@@ -127,6 +130,9 @@ class CreateLocalJobSchema(BaseModel):
             return []
         if not isinstance(v, list):
             v = [v]
+        
+        VALID_MARITAL_STATUSES = frozenset(o["value"] for o in MARITAL_STATUS_OPTIONS)
+
         if not all(s in VALID_MARITAL_STATUSES for s in v):
             raise ValueError("Invalid marital status")
         return v
@@ -157,15 +163,14 @@ class CreateLocalJobSchema(BaseModel):
 
     @model_validator(mode="after")
     def validate_salary_range(self):
-        if self.salary_max != -1 and self.salary_max < self.salary_min:
+        if self.salary_max is not None and self.salary_max < self.salary_min:
             raise ValueError("Maximum salary must be >= minimum salary")
         return self
 
     @model_validator(mode="after")
     def validate_images_and_keep(self):
         has_new_images  = self.images and len(self.images) > 0
-        has_kept_images = self.keep_image_ids and len(self.keep_image_ids) > 0
-        if not has_new_images and not has_kept_images:
+        if not has_new_images:
             raise ValueError("At least 1 image is required")
 
         if self.images:
@@ -183,13 +188,13 @@ async def create_local_job_form(
     age_min:          int                        = Form(...),
     age_max:          int                        = Form(...),
     salary_min:       int                        = Form(...),
-    salary_max:       int                        = Form(...),
     salary_unit:      str                        = Form(...),
     country:          str                        = Form(...),
     state:            str                        = Form(...),
     location:         str                        = Form(...),
     marital_statuses: List[str]                  = Form(...),
     images:           List[UploadFile]           = File(...),
+    salary_max:       Optional[int]                        = Form(None)
 ) -> CreateLocalJobSchema:
     try:
         return CreateLocalJobSchema(
@@ -218,14 +223,13 @@ class UpdateLocalJobSchema(BaseModel):
     age_min:          int
     age_max:          int
     salary_min:       int
-    salary_max:       int
     salary_unit:      str
     marital_statuses: List[str]      
-    country:          int
-    state:            int
+    salary_max:       Optional[int] = None
     keep_image_ids:   Optional[List[int]]        = None
-    location:         str
     images:           Optional[List[UploadFile]] = None
+    replace_image_ids:   Optional[List[int]]        = None
+    replace_images:           Optional[List[UploadFile]] = None
 
     @field_validator("title")
     def validate_title(cls, v):
@@ -265,13 +269,16 @@ class UpdateLocalJobSchema(BaseModel):
         if not 18 <= v <= 60:
             raise ValueError("Maximum age must be between 18 and 60")
         return v
-
+        
     @field_validator("marital_statuses")
     def validate_marital_statuses(cls, v):
         if v is None:
             return []
         if not isinstance(v, list):
             v = [v]
+        
+        VALID_MARITAL_STATUSES = frozenset(o["value"] for o in MARITAL_STATUS_OPTIONS)
+
         if not all(s in VALID_MARITAL_STATUSES for s in v):
             raise ValueError("Invalid marital status")
         return v
@@ -283,25 +290,7 @@ class UpdateLocalJobSchema(BaseModel):
         if not isinstance(v, list):
             v = [v]
         return [int(i) for i in v]
-
-    @field_validator("location")
-    def validate_location(cls, v):
-        try:
-            parsed = json.loads(v)
-        except Exception:
-            raise ValueError("Location must be a valid JSON object")
-        if not isinstance(parsed, dict):
-            raise ValueError("Location must be a valid JSON object")
-        lat = parsed.get("latitude")
-        lng = parsed.get("longitude")
-        if lat is None or lng is None:
-            raise ValueError("Location must have latitude and longitude")
-        if not -90 <= float(lat) <= 90:
-            raise ValueError("Latitude must be between -90 and 90")
-        if not -180 <= float(lng) <= 180:
-            raise ValueError("Longitude must be between -180 and 180")
-        return parsed
-
+    
     @model_validator(mode="after")
     def validate_age_range(self):
         if self.age_max < self.age_min:
@@ -310,26 +299,40 @@ class UpdateLocalJobSchema(BaseModel):
 
     @model_validator(mode="after")
     def validate_salary_range(self):
-        if self.salary_max != -1 and self.salary_max < self.salary_min:
+        if self.salary_max is not None and self.salary_max < self.salary_min:
             raise ValueError("Maximum salary must be >= minimum salary")
         return self
-
+    
     @model_validator(mode="after")
-    def validate_images_and_keep(self):
-        has_new_images  = self.images and len(self.images) > 0
-        has_kept_images = self.keep_image_ids and len(self.keep_image_ids) > 0
-        if not has_new_images and not has_kept_images:
-            raise ValueError("At least 1 image is required")
+    def validate_images(self):
+        has_kept_images = bool(self.keep_image_ids)
+        has_replace_images = bool(self.replace_images)
+        has_replace_ids = bool(self.replace_image_ids)
 
-        if self.images:
-            for image in self.images:
-                if image.content_type not in ALLOWED_TYPES:
-                    raise ValueError(f"Invalid file type: {image.filename}")
-                if image.size and image.size > MAX_IMAGE_SIZE:
-                    raise ValueError(f"Image {image.filename} must be under 1MB")
+        if has_replace_images and not has_replace_ids:
+            raise ValueError("replace_image_ids must be provided with replace_images")
+
+        if has_replace_ids and not has_replace_images:
+            raise ValueError("replace_images must be provided with replace_image_ids")
+
+        if has_replace_images and has_replace_ids:
+            if len(self.replace_images) != len(self.replace_image_ids):
+                raise ValueError("replace_images and replace_image_ids must have the same length")
+
+        if has_kept_images and has_replace_ids:
+            overlap = set(self.keep_image_ids) & set(self.replace_image_ids)
+            if overlap:
+                raise ValueError(f"Image IDs cannot be in both keep_image_ids and replace_image_ids: {overlap}")
+
+        for image in (self.images or []) + (self.replace_images or []):
+            if image.content_type not in ALLOWED_TYPES:
+                raise ValueError(f"Invalid file type: {image.filename}")
+            if image.size and image.size > MAX_IMAGE_SIZE:
+                raise ValueError(f"Image {image.filename} must be under 1MB")
+
         return self
 
-
+    
 async def update_local_job_form(
     local_job_id:     int,
     title:            str                       = Form(...),
@@ -338,14 +341,13 @@ async def update_local_job_form(
     age_min:          int                       = Form(...),
     age_max:          int                       = Form(...),
     salary_min:       int                       = Form(...),
-    salary_max:       int                       = Form(...),
     salary_unit:      str                       = Form(...),
-    country:          int                       = Form(...),
-    state:            int                       = Form(...),
-    location:         str                       = Form(...),
-    marital_statuses: Optional[List[str]]       = Form([]),
+    marital_statuses: List[str]                 = Form(...),
+    salary_max:       Optional[int]             = Form(None),
     keep_image_ids:   Optional[List[int]]       = Form(None),
     images:           Optional[List[UploadFile]] = File(None),
+    replace_image_ids:   Optional[List[int]]       = Form(None),
+    replace_images:           Optional[List[UploadFile]] = File(None),
 ) -> UpdateLocalJobSchema:
     try:
         return UpdateLocalJobSchema(
@@ -359,11 +361,10 @@ async def update_local_job_form(
             salary_max       = salary_max,
             salary_unit      = salary_unit,
             marital_statuses = marital_statuses,
-            country          = country,
-            state            = state,
             keep_image_ids   = keep_image_ids,
-            location         = location,
             images           = images,
+            replace_image_ids = replace_image_ids,
+            replace_images = replace_images
         )
     except ValidationError as e:
         raise RequestValidationError(e.errors())

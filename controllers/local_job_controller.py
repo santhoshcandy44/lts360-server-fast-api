@@ -9,6 +9,7 @@ from fastapi import Request
 from kafka.notification_service_producer import send_local_job_applicant_applied_notification_to_kafka
 from models.common import Country, State
 from schemas.local_job_schemas import (
+    MARITAL_STATUS_OPTIONS,
     CreateLocalJobSchema,
     GuestGetLocalJobsSchema,
 
@@ -46,10 +47,7 @@ SALARY_UNITS = [
     {"value": "USD", "name": "USD"},
 ]
 
-MARITAL_STATUS_OPTIONS = [
-    {"value": "single", "name": "Single"},
-    {"value": "married", "name": "Married"},
-]
+
 
 def _fmt_url(base, path):
     return f"{base}/{path}" if path else ""
@@ -125,16 +123,11 @@ def _local_job_detail_response(
             "age_max":         local_job.age_max,
             
             "marital_statuses": [
-                next(
-                    (ms for ms in MARITAL_STATUS_OPTIONS if ms["value"] == status),
-                    {"value": status, "name": status}
-                )
+                next(ms for ms in MARITAL_STATUS_OPTIONS if ms["value"] == status)
                 for status in (json.loads(local_job.marital_statuses) if isinstance(local_job.marital_statuses, str) else local_job.marital_statuses)
             ],
             
-            "price_unit":              next(
-                                (pu for pu in SALARY_UNITS if pu["value"] == local_job.price_unit),
-                                {"value": local_job.price_unit, "name": local_job.price_unit}),
+            "salary_unit":              next(pu for pu in SALARY_UNITS if pu["value"] == local_job.salary_unit),
 
             "salary_min":      local_job.salary_min,
             "salary_max":      local_job.salary_max,
@@ -183,16 +176,11 @@ def _published_local_job_response(
             "age_max":         local_job.age_max,
 
             "marital_statuses": [
-                next(
-                    (ms for ms in MARITAL_STATUS_OPTIONS if ms["value"] == status),
-                    {"value": status, "name": status}
-                )
+                next(ms for ms in MARITAL_STATUS_OPTIONS if ms["value"] == status)
                 for status in (json.loads(local_job.marital_statuses) if isinstance(local_job.marital_statuses, str) else local_job.marital_statuses)
             ],
             
-            "price_unit":              next(
-                                (pu for pu in SALARY_UNITS if pu["value"] == local_job.price_unit),
-                                {"value": local_job.price_unit, "name": local_job.price_unit}),
+            "salary_unit":              next(pu for pu in SALARY_UNITS if pu["value"] == local_job.salary_unit),
             
             "salary_min":      local_job.salary_min,
             "salary_max":      local_job.salary_max,
@@ -591,7 +579,7 @@ async def create_local_job(
         return send_json_response(200, "Local job published", data=_published_local_job_response(new_job))
 
     except Exception:
-        db.rollback()
+        await db.rollback()
         for key in uploaded_keys:
             await delete_from_s3(key)
         return send_error_response(request, 500, "Internal server error")
@@ -599,7 +587,6 @@ async def create_local_job(
 
 async def update_local_job(
     request:      Request,
-    local_job_id: int,
     schema:       UpdateLocalJobSchema,
     db:           AsyncSession,
 ):
@@ -619,22 +606,12 @@ async def update_local_job(
                 selectinload(LocalJob.owner),
             )
             .where(
-                LocalJob.local_job_id == local_job_id,
+                LocalJob.local_job_id == schema.local_job_id,
                 LocalJob.created_by   == user_id,
             )
         )
         if not existing:
             return send_error_response(request, 404, "Local job not found")
-
-        country = await db.scalar(select(Country).where(Country.id == schema.country))
-        if not country:
-            return send_error_response(request, 400, "Invalid country")
-
-        state = await db.scalar(
-            select(State).where(State.id == schema.state, State.country_id == schema.country)
-        )
-        if not state:
-            return send_error_response(request, 400, "Invalid state")
 
         existing.title            = schema.title
         existing.description      = schema.description
@@ -645,20 +622,22 @@ async def update_local_job(
         existing.salary_min       = schema.salary_min
         existing.salary_max       = schema.salary_max
         existing.marital_statuses = json.dumps(schema.marital_statuses)
-        existing.country_id       = country.id
-        existing.state_id         = state.id
         db.add(existing)
 
         await db.flush()
 
-        keep_ids     = set(schema.keep_image_ids or [])
+        keep_ids = set(schema.keep_image_ids or [])
+        replace_ids = schema.replace_image_ids or []
+        replace_images = schema.replace_images or []
         deleted_keys = []
 
+        # delete images not in keep_ids and not in replace_ids
         for img in existing.images:
-            if img.id not in keep_ids:
+            if img.id not in keep_ids and img.id not in set(replace_ids):
                 deleted_keys.append(img.url)
                 await db.delete(img)
 
+        # add new images
         for image in images:
             contents = await image.read()
             key = f"media/{media_id}/local-jobs/{existing.local_job_id}/{uuid.uuid4()}-{image.filename}"
@@ -677,25 +656,29 @@ async def update_local_job(
                 format       = image.content_type or "",
             ))
 
-        await db.flush()
+        # replace existing images — zip ids with files
+        for image_id, image in zip(replace_ids, replace_images):
+            existing_img = next((img for img in existing.images if img.id == image_id), None)
+            if not existing_img:
+                continue
 
-        location = schema.location
-        loc      = existing.location
+            contents = await image.read()
+            new_key = f"media/{media_id}/local-jobs/{existing.local_job_id}/{uuid.uuid4()}-{image.filename}"
+            await upload_to_s3(contents, new_key, image.content_type)
+            uploaded_keys.append(new_key)
 
-        if loc:
-            loc.latitude      = location["latitude"]
-            loc.longitude     = location["longitude"]
-            loc.geo           = location["geo"]
-            loc.location_type = location["location_type"]
-            db.add(loc)
-        else:
-            db.add(LocalJobLocation(
-                local_job_id  = existing.local_job_id,
-                latitude      = location["latitude"],
-                longitude     = location["longitude"],
-                geo           = location["geo"],
-                location_type = location["location_type"],
-            ))
+            old_key = existing_img.url
+            deleted_keys.append(old_key)
+
+            pil_img = Image.open(io.BytesIO(contents))
+            width, height = pil_img.size
+
+            existing_img.url    = new_key
+            existing_img.width  = width
+            existing_img.height = height
+            existing_img.size   = len(contents)
+            existing_img.format = image.content_type or ""
+            db.add(existing_img)
 
         await db.flush()
 
@@ -706,7 +689,7 @@ async def update_local_job(
         return send_json_response(200, "Local job updated", data=_published_local_job_response(existing))
 
     except Exception:
-        db.rollback()
+        await db.rollback()
         for key in uploaded_keys:
             await delete_from_s3(key)
         return send_error_response(request, 500, "Internal server error")
@@ -716,44 +699,87 @@ async def get_published_local_jobs(
     schema: GetPublishedLocalJobsSchema,
     db: AsyncSession,
 ):
-    user_id = request.state.user.user_id
-    next_token = schema.next_token
-    page_size = schema.page_size
-    payload = decode_cursor(next_token) if next_token else None
+    try:
+        user_id = request.state.user.user_id
+        next_token = schema.next_token
+        page_size = schema.page_size
+        payload = decode_cursor(next_token) if next_token else None
 
-    q = (
-        select(LocalJob)
-        .where(LocalJob.created_by == user_id)
-        .options(
-            selectinload(LocalJob.images),      
-            selectinload(LocalJob.location),   
-            selectinload(LocalJob.owner)      
+        q = (
+            select(LocalJob)
+            .where(LocalJob.created_by == user_id)
+            .options(
+                selectinload(LocalJob.images),      
+                selectinload(LocalJob.location),   
+                selectinload(LocalJob.owner)      
+            )
         )
-    )
 
-    if payload:
-        q = q.where(or_(
-            LocalJob.created_at < payload["created_at"],
-            and_(LocalJob.created_at == payload["created_at"], LocalJob.id > payload["id"]),
-        ))
+        if payload:
+            q = q.where(or_(
+                LocalJob.created_at < payload["created_at"],
+                and_(LocalJob.created_at == payload["created_at"], LocalJob.id > payload["id"]),
+            ))
 
-    q = q.order_by(LocalJob.created_at.desc(), LocalJob.id.asc()).limit(page_size)
+        q = q.order_by(LocalJob.created_at.desc(), LocalJob.id.asc()).limit(page_size)
 
-    localJobs = (await db.execute(q)).scalars().all()
+        localJobs = (await db.execute(q)).scalars().all()
 
-    items = [_published_local_job_response(local_job) for local_job in localJobs]
-    last_row = localJobs[-1] if localJobs else None
+        items = [_published_local_job_response(local_job) for local_job in localJobs]
+        last_row = localJobs[-1] if localJobs else None
 
-    return send_json_response(
-        200,
-        "Local jobs retrieved",
-        data=_paginate_jobs_by_job(items, getattr(last_row, "LocalJob", None), page_size, next_token if payload else None)
+        return send_json_response(
+            200,
+            "Local jobs retrieved",
+            data=_paginate_jobs_by_job(items, getattr(last_row, "LocalJob", None), page_size, next_token if payload else None)
+            )
+    except Exception:
+        import traceback
+        import sys
+        traceback.print_exc(file=sys.stderr)
+        sys.stderr.flush()
+        return send_error_response(request, 500, "Internal error")
+
+async def get_published_local_job(
+    request: Request,
+    schema: LocalJobIdSchema,
+    db: AsyncSession,
+):
+    try:
+        user_id = request.state.user.user_id
+
+        local_job = await db.scalar(
+            select(LocalJob)
+            .where(
+                LocalJob.local_job_id == schema.local_job_id,
+                LocalJob.created_by == user_id
+            )
+            .options(
+                selectinload(LocalJob.images),
+                selectinload(LocalJob.location),
+                selectinload(LocalJob.owner)
+            )
         )
+
+        if not local_job:
+            return send_error_response(request, 404, "Local job not found")
+
+        return send_json_response(
+            200,
+            "Local job retrieved",
+            data=_published_local_job_response(local_job)
+        )
+    except Exception:
+        import traceback
+        import sys
+        traceback.print_exc(file=sys.stderr)
+        sys.stderr.flush()
+        return send_error_response(request, 500, "Internal server error")
 
 async def delete_local_job(request: Request, schema: LocalJobIdSchema, db: AsyncSession):
     try:
-        user_id = request.state.user.user_id,
-        local_job_id = schema.local_job_id,
+        user_id = request.state.user.user_id
+        local_job_id = schema.local_job_id
 
         local_job = await db.scalar(
             select(LocalJob).where(LocalJob.local_job_id == local_job_id, LocalJob.created_by == user_id)
@@ -764,11 +790,10 @@ async def delete_local_job(request: Request, schema: LocalJobIdSchema, db: Async
         media_id = await db.scalar(select(User.media_id).where(User.user_id == user_id))
 
         await db.delete(local_job)
-
         if media_id:
             await delete_directory_from_s3(f"media/{media_id}/local-localJobs/{local_job_id}")
-
-        return send_json_response(200, "Local local_job deleted")
+ 
+        return send_json_response(200, "Loca job deleted")
     except Exception:
         return send_error_response(request, 500, "Internal server error")
 
@@ -952,7 +977,7 @@ async def get_publish_meta_options(request: Request, db: AsyncSession):
                     {"country_id": c.id, "name": c.name}
                     for c in countries
                 ],
-                "martial_status_options": MARITAL_STATUS_OPTIONS,
+                "marital_status_options": MARITAL_STATUS_OPTIONS,
                 "salary_units": SALARY_UNITS
             }
         )
