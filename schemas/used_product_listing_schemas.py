@@ -203,13 +203,12 @@ class UpdateUsedProductListingSchema(BaseModel):
     used_product_listing_id: int
     name:                    str
     description:             str
-    country:                 int
-    state:                   int
-    keep_image_ids:          Optional[List[int]] = None
     price:                   float
     price_unit:              str
-    location:                str
+    keep_image_ids:          Optional[List[int]] = None
     images:                  Optional[List[UploadFile]] = None
+    replace_image_ids:   Optional[List[int]]        = None
+    replace_images:           Optional[List[UploadFile]] = None
 
     @field_validator("name")
     def validate_name(cls, v):
@@ -235,71 +234,65 @@ class UpdateUsedProductListingSchema(BaseModel):
             raise ValueError("Price must be >= 0")
         return v
 
-    @field_validator("keep_image_ids", mode="before")
+    @field_validator("keep_image_ids")
     def validate_keep_image_ids(cls, v):
         if v is None:
             return None
         if not isinstance(v, list):
             v = [v]
         return [int(i) for i in v]
-
-    @field_validator("location")
-    def validate_location(cls, v):
-        try:
-            parsed = json.loads(v)
-        except Exception:
-            raise ValueError("Location must be a valid JSON object")
-        if not isinstance(parsed, dict):
-            raise ValueError("Location must be a valid JSON object")
-        lat = parsed.get("latitude")
-        lng = parsed.get("longitude")
-        if lat is None or lng is None:
-            raise ValueError("Location must have latitude and longitude")
-        if not -90 <= float(lat) <= 90:
-            raise ValueError("Latitude must be between -90 and 90")
-        if not -180 <= float(lng) <= 180:
-            raise ValueError("Longitude must be between -180 and 180")
-        return parsed  
-    
+     
     @model_validator(mode="after")
-    def validate_images_and_keep(self):
-        has_new_images  = self.images and len(self.images) > 0
-        has_kept_images = self.keep_image_ids and len(self.keep_image_ids) > 0
-        if not has_new_images and not has_kept_images:
-            raise ValueError("At least 1 image is required")
+    def validate_images(self):
+        has_kept_images = bool(self.keep_image_ids)
+        has_replace_images = bool(self.replace_images)
+        has_replace_ids = bool(self.replace_image_ids)
 
-        if self.images:
-            for image in self.images:
-                if image.content_type not in ALLOWED_TYPES:
-                    raise ValueError(f"Invalid file type: {image.filename}")
-                if image.size and image.size > MAX_IMAGE_SIZE:
-                    raise ValueError(f"Image {image.filename} must be under 1MB")
+        if has_replace_images and not has_replace_ids:
+            raise ValueError("replace_image_ids must be provided with replace_images")
+
+        if has_replace_ids and not has_replace_images:
+            raise ValueError("replace_images must be provided with replace_image_ids")
+
+        if has_replace_images and has_replace_ids:
+            if len(self.replace_images) != len(self.replace_image_ids):
+                raise ValueError("replace_images and replace_image_ids must have the same length")
+
+        if has_kept_images and has_replace_ids:
+            overlap = set(self.keep_image_ids) & set(self.replace_image_ids)
+            if overlap:
+                raise ValueError(f"Image IDs cannot be in both keep_image_ids and replace_image_ids: {overlap}")
+
+        for image in (self.images or []) + (self.replace_images or []):
+            if image.content_type not in ALLOWED_TYPES:
+                raise ValueError(f"Invalid file type: {image.filename}")
+            if image.size and image.size > MAX_IMAGE_SIZE:
+                raise ValueError(f"Image {image.filename} must be under 1MB")
+
         return self
 
 async def update_used_product_listing_form(
     used_product_listing_id: int,
     name:                    str                  = Form(...),
     description:             str                  = Form(...),
-    country:                 str                  = Form(...),
-    state:                   str                  = Form(...),
     price:                   float                = Form(...),
     price_unit:              str                  = Form(...),
-    location:                str                  = Form(...),
-    keep_image_ids:          Optional[List[int]]  = Form(default=None),
-    images:           Annotated[Optional[List[UploadFile]], File()] = None,
+    keep_image_ids:   Optional[List[int]]       = Form(None),
+    images:           Optional[List[UploadFile]] = File(None),
+    replace_image_ids:   Optional[List[int]]       = Form(None),
+    replace_images:           Optional[List[UploadFile]] = File(None),
 ) -> UpdateUsedProductListingSchema:
     try:
         return UpdateUsedProductListingSchema(
             used_product_listing_id = used_product_listing_id,
             name                    = name,
             description             = description,
-            country                 = country,
-            state                   = state,
             price                   = price,
             price_unit              = price_unit,
-            location                = location,
-            keep_image_ids          = keep_image_ids,
-            images                  = images
+            keep_image_ids   = keep_image_ids,
+            images           = images,
+            replace_image_ids = replace_image_ids,
+            replace_images = replace_images
         )
     except ValidationError as e:
         raise RequestValidationError(e.errors()) 

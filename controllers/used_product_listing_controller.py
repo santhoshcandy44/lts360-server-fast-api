@@ -776,17 +776,21 @@ async def update_used_product_listing(
 
         await db.flush()
 
-        keep_ids     = set(schema.keep_image_ids or [])
+        keep_ids = set(schema.keep_image_ids or [])
+        replace_ids = schema.replace_image_ids or []
+        replace_images = schema.replace_images or []
         deleted_keys = []
 
+        # delete images not in keep_ids and not in replace_ids
         for img in existing.images:
-            if img.id not in keep_ids:
+            if img.id not in keep_ids and img.id not in set(replace_ids):
                 deleted_keys.append(img.url)
                 await db.delete(img)
 
+        # add new images
         for image in images:
             contents = await image.read()
-            key = f"media/{media_id}/used-product-listings/{existing.used_product_listing_id}/{uuid.uuid4()}-{image.filename}"
+            key = f"media/{media_id}/used-product-listings/{existing.local_job_id}/{uuid.uuid4()}-{image.filename}"
             await upload_to_s3(contents, key, image.content_type)
             uploaded_keys.append(key)
 
@@ -794,33 +798,37 @@ async def update_used_product_listing(
             width, height = img.size
 
             db.add(UsedProductListingImage(
-                used_product_listing_id = existing.used_product_listing_id,
-                url    = key,
-                width  = width,
-                height = height,
-                size   = len(contents),
-                format = image.content_type or "",
+                local_job_id = existing.local_job_id,
+                url          = key,
+                width        = width,
+                height       = height,
+                size         = len(contents),
+                format       = image.content_type or "",
             ))
 
-        await db.flush()
+        # replace existing images — zip ids with files
+        for image_id, image in zip(replace_ids, replace_images):
+            existing_img = next((img for img in existing.images if img.id == image_id), None)
+            if not existing_img:
+                continue
 
-        location = schema.location
-        loc      = existing.location
+            contents = await image.read()
+            new_key = f"media/{media_id}/used-product-listings/{existing.local_job_id}/{uuid.uuid4()}-{image.filename}"
+            await upload_to_s3(contents, new_key, image.content_type)
+            uploaded_keys.append(new_key)
 
-        if loc:
-            loc.latitude      = location["latitude"]
-            loc.longitude     = location["longitude"]
-            loc.geo           = location["geo"]
-            loc.location_type = location["location_type"]
-            db.add(loc)
-        else:
-            db.add(UsedProductListingLocation(
-                used_product_listing_id = existing.used_product_listing_id,
-                latitude      = location["latitude"],
-                longitude     = location["longitude"],
-                geo           = location["geo"],
-                location_type = location["location_type"],
-            ))
+            old_key = existing_img.url
+            deleted_keys.append(old_key)
+
+            pil_img = Image.open(io.BytesIO(contents))
+            width, height = pil_img.size
+
+            existing_img.url    = new_key
+            existing_img.width  = width
+            existing_img.height = height
+            existing_img.size   = len(contents)
+            existing_img.format = image.content_type or ""
+            db.add(existing_img)
 
         await db.flush()
 
