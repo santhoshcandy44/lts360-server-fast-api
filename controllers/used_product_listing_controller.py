@@ -718,7 +718,7 @@ async def create_used_product_listing(
         await db.refresh(used_product_listing, attribute_names=["images", "location", "owner"])    
         return send_json_response(200, "Used product listing published", data=_published_used_product_listing_response(used_product_listing))
     except Exception:
-        db.rollback()
+        await db.rollback()
         for key in uploaded_keys:
             await delete_from_s3(key)
         return send_error_response(request, 500, "Internal server error")
@@ -751,27 +751,10 @@ async def update_used_product_listing(
         if not existing:
             return send_error_response(request, 404, "Invalid product listing")
 
-        country = await db.scalar(
-            select(Country).where(Country.id == schema.country)
-        )
-        if not country:
-            return send_error_response(request, 400, "Invalid country")
-
-        state = await db.scalar(
-            select(State).where(
-                State.id == schema.state,
-                State.country_id == schema.country
-            )
-        )
-        if not state:
-            return send_error_response(request, 400, "Invalid state")
-
         existing.name        = schema.name
         existing.description = schema.description
         existing.price_unit  = schema.price_unit
         existing.price       = schema.price
-        existing.country_id  = country.id
-        existing.state_id    = state.id
         db.add(existing)
 
         await db.flush()
@@ -790,7 +773,7 @@ async def update_used_product_listing(
         # add new images
         for image in images:
             contents = await image.read()
-            key = f"media/{media_id}/used-product-listings/{existing.local_job_id}/{uuid.uuid4()}-{image.filename}"
+            key = f"media/{media_id}/used-product-listings/{existing.used_product_listing_id}/{uuid.uuid4()}-{image.filename}"
             await upload_to_s3(contents, key, image.content_type)
             uploaded_keys.append(key)
 
@@ -798,7 +781,7 @@ async def update_used_product_listing(
             width, height = img.size
 
             db.add(UsedProductListingImage(
-                local_job_id = existing.local_job_id,
+                used_product_listing_id = existing.used_product_listing_id,
                 url          = key,
                 width        = width,
                 height       = height,
@@ -813,7 +796,7 @@ async def update_used_product_listing(
                 continue
 
             contents = await image.read()
-            new_key = f"media/{media_id}/used-product-listings/{existing.local_job_id}/{uuid.uuid4()}-{image.filename}"
+            new_key = f"media/{media_id}/used-product-listings/{existing.used_product_listing_id}/{uuid.uuid4()}-{image.filename}"
             await upload_to_s3(contents, new_key, image.content_type)
             uploaded_keys.append(new_key)
 
@@ -837,8 +820,8 @@ async def update_used_product_listing(
 
         await db.refresh(existing, attribute_names=["images", "location", "owner"])
         return send_json_response(200, "Used product listing updated", data=_published_used_product_listing_response(existing))
-    except Exception:
-        db.rollback()
+    except Exception:  
+        await db.rollback()
         for key in uploaded_keys:
             await delete_from_s3(key)
         return send_error_response(request, 500, "Internal server error")
