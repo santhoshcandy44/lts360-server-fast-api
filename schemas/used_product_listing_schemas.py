@@ -162,9 +162,7 @@ class CreateUsedProductListingSchema(BaseModel):
     
     @model_validator(mode="after")
     def validate_images_and_keep(self):
-        has_new_images  = self.images and len(self.images) > 0
-        has_kept_images = self.keep_image_ids and len(self.keep_image_ids) > 0
-        if not has_new_images and not has_kept_images:
+        if not self.images:
             raise ValueError("At least 1 image is required")
 
         if self.images:

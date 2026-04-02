@@ -457,7 +457,7 @@ async def guest_get_used_product_listings(request: Request, schema: GuestGetUsed
         lon = schema.longitude
 
         data = await _query_used_product_listings(db=db, page_size=page_size, query=s, user_lat=lat, user_lon=lon, next_token=next_token)
-        return send_json_response(200, "Local usedProductListings fetched", data= data)
+        return send_json_response(200, "UsedProductListings fetched", data= data)
     except Exception:
         return send_error_response(request, 500, "Internal server error")
     
@@ -473,7 +473,7 @@ async def get_used_product_listings(request: Request, schema: GetUsedProductList
         lat, lon = (float(loc.latitude), float(loc.longitude)) if loc else (None, None)
 
         data = await _query_used_product_listings(db=db, user_id=user_id, page_size=page_size, query=s, user_lat=lat, user_lon=lon, next_token=next_token)
-        return send_json_response(200, "Local usedProductListings fetched", data= data)
+        return send_json_response(200, "UsedProductListings fetched", data= data)
     except Exception:
         return send_error_response(request, 500, "Internal server error")    
 
@@ -633,7 +633,7 @@ async def create_used_product_listing(
         if not state:
             return send_error_response(request, 400, "Invalid state")
         
-        new_product = UsedProductListing(
+        new_used_product_listing = UsedProductListing(
                 name             = schema.name,
                 description      = schema.description,
                 price_unit       = schema.price_unit,
@@ -642,77 +642,48 @@ async def create_used_product_listing(
                 state_id           = state.id,
                 created_by       = user_id
                 )
-        db.add(new_product)
+        db.add(new_used_product_listing)
         
         await db.flush()
-        
-        used_product_listing = await db.scalar(
-            select(UsedProductListing)
-            .options(
-                selectinload(UsedProductListing.images),
-                selectinload(UsedProductListing.location),
-                selectinload(UsedProductListing.owner),
-            )  
-            .where(
-                UsedProductListing.used_product_listing_id == new_product.used_product_listing_id,
-                UsedProductListing.created_by   == user_id
-            ))
-          
-        old_images = used_product_listing.images
-        keep_ids   = set(schema.keep_image_ids or [])
-        deleted_keys   = []
-
-        for img in old_images:
-            if img.id not in keep_ids:
-                deleted_keys.append(img.url) 
-                await db.delete(img)
-
+                 
         for image in images:
             contents = await image.read()
-            key      = f"media/{media_id}/used-product-listings/{used_product_listing.used_product_listing_id}/{uuid.uuid4()}-{image.filename}"
+            key = f"media/{media_id}/used-product-listings/{new_used_product_listing.used_product_listing_id}/{uuid.uuid4()}-{image.filename}"
             await upload_to_s3(contents, key, image.content_type)
             uploaded_keys.append(key)
 
             img = Image.open(io.BytesIO(contents))
             width, height = img.size
- 
+
             db.add(UsedProductListingImage(
-                used_product_listing_id = used_product_listing.used_product_listing_id,
-                url    = key,
+                used_product_listing_id = new_used_product_listing.used_product_listing_id,
+                url          = key,
                 width        = width,
                 height       = height,
                 size         = len(contents),
                 format       = image.content_type or "",
             ))
 
-        await db.flush() 
+        await db.flush()  
 
         location = schema.location
-        loc      = used_product_listing.location
-
-        if loc:
-            loc.latitude      = location["latitude"]
-            loc.longitude     = location["longitude"]
-            loc.geo           = location["geo"]
-            loc.location_type = location["location_type"]
-            db.add(loc)
-        else:
-            db.add(UsedProductListingLocation(
-                used_product_listing_id  = used_product_listing.used_product_listing_id,
+        db.add(UsedProductListingLocation(
+                used_product_listing_id  = new_used_product_listing.used_product_listing_id,
                 latitude      = location["latitude"],
                 longitude     = location["longitude"],
                 geo           = location["geo"],
                 location_type = location["location_type"],
-            ))
+        ))
 
         await db.flush()
 
-        for key in deleted_keys:
-            await delete_from_s3(key)
-
-        await db.refresh(used_product_listing, attribute_names=["images", "location", "owner"])    
-        return send_json_response(200, "Used product listing published", data=_published_used_product_listing_response(used_product_listing))
+        await db.refresh(new_used_product_listing, attribute_names=["images", "location", "owner"])    
+        return send_json_response(200, "Used product listing published", data=_published_used_product_listing_response(new_used_product_listing))
     except Exception:
+        import traceback
+        import sys
+        traceback.print_exc(file=sys.stderr)
+        sys.stderr.flush()
         await db.rollback()
         for key in uploaded_keys:
             await delete_from_s3(key)

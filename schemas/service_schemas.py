@@ -253,10 +253,10 @@ class CreateServiceSchema(BaseModel):
         return self
 
 class PlanFeature(BaseModel):
-    feature_name:  str
-    feature_value: str
+    name:  str
+    value: str
 
-    @field_validator("feature_name")
+    @field_validator("name")
     def validate_feature_name(cls, v):
         if not isinstance(v, str):
             raise ValueError("Feature name must be a string")
@@ -264,34 +264,12 @@ class PlanFeature(BaseModel):
             raise ValueError("Feature name must have a maximum length of 40")
         return v
 
-    @field_validator("feature_value")
+    @field_validator("value")
     def validate_feature_value(cls, v):
         if not isinstance(v, str):
             raise ValueError("Feature value must be a string")
         if len(v) > 10:
             raise ValueError("Feature value must have a maximum length of 10")
-        return v
-
-class PlanFeature(BaseModel):
-    feature_name:  str
-    feature_value: str
-
-    @field_validator("feature_name")
-    def validate_feature_name(cls, v):
-        v = v.strip()
-        if not v:
-            raise ValueError("Feature name cannot be empty")
-        if len(v) > 40:
-            raise ValueError("Feature name cannot exceed 40 characters")
-        return v
-
-    @field_validator("feature_value")
-    def validate_feature_value(cls, v):
-        v = v.strip()
-        if not v:
-            raise ValueError("Feature value cannot be empty")
-        if len(v) > 10:
-            raise ValueError("Feature value cannot exceed 10 characters")
         return v
 
 class Plan(BaseModel):

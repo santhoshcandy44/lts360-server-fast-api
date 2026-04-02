@@ -539,7 +539,7 @@ async def create_local_job(
         if not state:
             return send_error_response(request, 400, "Invalid state")
 
-        new_job = LocalJob(
+        new_local_job = LocalJob(
             title            = schema.title,
             description      = schema.description,
             company          = schema.company,
@@ -553,12 +553,12 @@ async def create_local_job(
             state_id         = state.id,
             created_by       = user_id
         )
-        db.add(new_job)
+        db.add(new_local_job)
         await db.flush()
 
         for image in images:
             contents = await image.read()
-            key = f"media/{media_id}/local-jobs/{new_job.local_job_id}/{uuid.uuid4()}-{image.filename}"
+            key = f"media/{media_id}/local-jobs/{new_local_job.local_job_id}/{uuid.uuid4()}-{image.filename}"
             await upload_to_s3(contents, key, image.content_type)
             uploaded_keys.append(key)
 
@@ -566,7 +566,7 @@ async def create_local_job(
             width, height = img.size
 
             db.add(LocalJobImage(
-                local_job_id = new_job.local_job_id,
+                local_job_id = new_local_job.local_job_id,
                 url          = key,
                 width        = width,
                 height       = height,
@@ -578,7 +578,7 @@ async def create_local_job(
 
         location = schema.location
         db.add(LocalJobLocation(
-            local_job_id = new_job.local_job_id,
+            local_job_id = new_local_job.local_job_id,
             latitude     = location["latitude"],
             longitude    = location["longitude"],
             geo          = location["geo"],
@@ -587,8 +587,8 @@ async def create_local_job(
 
         await db.flush()
 
-        await db.refresh(new_job, attribute_names=["images", "location", "owner"])
-        return send_json_response(200, "Local job published", data=_published_local_job_response(new_job))
+        await db.refresh(new_local_job, attribute_names=["images", "location", "owner"])
+        return send_json_response(200, "Local job published", data=_published_local_job_response(new_local_job))
 
     except Exception:
         await db.rollback()
