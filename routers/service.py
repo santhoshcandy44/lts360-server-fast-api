@@ -21,7 +21,6 @@ from schemas.service_schemas import (
     UpdateServiceThumbnailSchema,
     UpdateServiceImagesSchema,
     UpdateServicePlansSchema,
-    UpdateServiceLocationSchema,
 
     ServiceSearchSuggestionsSchema,
     UpdateIndustriesSchema,
@@ -124,6 +123,7 @@ async def create_service(
 ):
     return await service_controller.create_service(request, schema, db)
 
+
 @router.get("/published")
 async def get_published_services(
     request: Request,
@@ -133,6 +133,82 @@ async def get_published_services(
 ):
     return await service_controller.get_published_services(request, schema, db)
 
+@router.get("/published/{service_id}/info")
+async def get_published_service_info(
+    request: Request,
+    schema:  ServiceIdSchema = Depends(),
+    db:      AsyncSession = Depends(get_db),
+    _:       None = Depends(authenticate_token),
+):
+    return await service_controller.get_published_service_info(request, schema, db)
+
+@router.get("/published/{service_id}/thumbnail")
+async def get_published_service_thumbnail(
+    request: Request,
+    schema:  ServiceIdSchema = Depends(),
+    db:      AsyncSession = Depends(get_db),
+    _:       None = Depends(authenticate_token),
+):
+    return await service_controller.get_published_service_thumbnail(request, schema, db)
+
+@router.get("/published/{service_id}/images")
+async def get_published_service_images(
+    request: Request,
+    schema:  ServiceIdSchema = Depends(),
+    db:      AsyncSession = Depends(get_db),
+    _:       None = Depends(authenticate_token),
+):
+    return await service_controller.get_published_service_images(request, schema, db)
+
+@router.get("/published/{service_id}/plans")
+async def get_published_service_plans(
+    request: Request,
+    schema:  ServiceIdSchema = Depends(),
+    db:      AsyncSession = Depends(get_db),
+    _:       None = Depends(authenticate_token),
+):
+    return await service_controller.get_published_service_plans(request, schema, db)
+
+@router.patch("/published/{service_id}/info")
+async def update_service_info(
+    request: Request,
+    schema: UpdateServiceInfoSchema,
+    params: ServiceIdSchema = Depends(),
+    db:        AsyncSession = Depends(get_db),
+    _:       None = Depends(authenticate_token),
+): 
+    schema.service_id = params.service_id
+    return await service_controller.update_service_info(request, schema, db)
+
+@router.patch("/published/{service_id}/thumbnail")
+async def update_service_thumbnail(
+    request:   Request,
+    schema:      UpdateServiceThumbnailSchema = Depends(update_thumbnail_form),
+    db:        AsyncSession = Depends(get_db),
+    _:         None = Depends(authenticate_token),
+):
+    return await service_controller.update_service_thumbnail(request, schema, db)
+
+@router.patch("/published/{service_id}/service-images")
+async def update_service_images(
+    request: Request,
+    schema:    UpdateServiceImagesSchema = Depends(update_service_images_form),
+    db:      AsyncSession = Depends(get_db),
+    _:       None = Depends(authenticate_token),
+):
+    return await service_controller.update_service_images(request, schema, db)
+
+@router.patch("/published/{service_id}/plans")
+async def update_service_plans(
+    request: Request,
+    schema:  UpdateServicePlansSchema,
+    params: ServiceIdSchema = Depends(),
+    db:      AsyncSession = Depends(get_db),
+    _:       None = Depends(authenticate_token),
+):
+    schema.service_id = params.service_id
+    return await service_controller.update_service_plans(request, schema, db)
+
 @router.get("/search-suggestions")
 async def search_suggestions(
     request: Request,
@@ -141,14 +217,6 @@ async def search_suggestions(
     _:       None = Depends(authenticate_token),
 ):
     return await service_controller.services_search_suggestions(request, schema, db)
-
-@router.get("/industries/options")
-async def get_industries_options(
-    request: Request,
-    db:      AsyncSession = Depends(get_db),
-    _:       None = Depends(authenticate_token),
-):
-    return await service_controller.get_industries_options(request, db)
 
 @router.get("/industries")
 async def get_industries(
@@ -167,14 +235,29 @@ async def update_industries(
 ):
     return await service_controller.update_industries(request, schema, db)
 
-
-@router.get("/publish/location/countries/options")
+@router.get("/publish/meta/options")
 async def get_publish_countries_options(
     request: Request,
     db:      AsyncSession = Depends(get_db),
     _:       None = Depends(authenticate_token),
 ):
-    return await service_controller.get_publish_countries_options(request, db)
+    return await service_controller.get_publish_meta_options(request, db)
+
+@router.get("/publish/meta/options/info")
+async def get_publish_countries_options(
+    request: Request,
+    db:      AsyncSession = Depends(get_db),
+    _:       None = Depends(authenticate_token),
+):
+    return await service_controller.get_publish_meta_options(request, db)
+
+@router.get("/publish/meta/options/plans")
+async def get_publish_countries_options(
+    request: Request,
+    db:      AsyncSession = Depends(get_db),
+    _:       None = Depends(authenticate_token),
+):
+    return await service_controller.get_publish_meta_options(request, db)
 
 
 @router.get("/publish/location/states/options")
@@ -194,63 +277,6 @@ async def get_service_by_service_id(
     _:       None = Depends(authenticate_token),
 ):
     return await service_controller.get_service_by_service_id(request, schema, db)
-
-@router.patch("/{service_id}/info")
-async def update_service_info(
-    request: Request,
-    schema: UpdateServiceInfoSchema,
-    params: ServiceIdSchema = Depends(),
-    db:        AsyncSession = Depends(get_db),
-    _:       None = Depends(authenticate_token),
-): 
-    schema.service_id = params.service_id
-    return await service_controller.update_service_info(request, schema, db)
-
-@router.patch("/{service_id}/thumbnail")
-async def update_service_thumbnail(
-    request:   Request,
-    schema:      UpdateServiceThumbnailSchema = Depends(update_thumbnail_form),
-    db:        AsyncSession = Depends(get_db),
-    _:         None = Depends(authenticate_token),
-):
-    return await service_controller.update_service_thumbnail(request, schema, db)
-
-@router.patch("/{service_id}/images")
-async def update_service_images(
-    request: Request,
-    schema:    UpdateServiceImagesSchema = Depends(update_service_images_form),
-    images:  Optional[List[UploadFile]] = File(default=None),
-    db:      AsyncSession = Depends(get_db),
-    _:       None = Depends(authenticate_token),
-):
-    has_new_images  = images and len(images) > 0
-    has_kept_images = schema.keep_image_ids and len(schema.keep_image_ids) > 0
-    if not has_new_images and not has_kept_images:
-        raise HTTPException(status_code=422, detail="At least 1 image is required")
-
-    return await service_controller.update_service_images(request, schema, db)
-
-@router.patch("/{service_id}/plans")
-async def update_service_plans(
-    request: Request,
-    schema:  UpdateServicePlansSchema,
-    params: ServiceIdSchema = Depends(),
-    db:      AsyncSession = Depends(get_db),
-    _:       None = Depends(authenticate_token),
-):
-    schema.service_id = params.service_id
-    return await service_controller.update_service_plans(request, schema, db)
-
-@router.patch("/{service_id}/location")
-async def update_service_location(
-    request: Request,
-    schema:  UpdateServiceLocationSchema,
-    params: ServiceIdSchema = Depends(),
-    db:      AsyncSession = Depends(get_db),
-    _:       None = Depends(authenticate_token),
-):
-    schema.service_id = params.service_id
-    return await service_controller.update_service_location(request, schema, db)
 
 @router.delete("/{service_id}")
 async def delete_service(

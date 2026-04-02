@@ -45,12 +45,20 @@ class UsedProductListing(SQLModel, table=True):
 
     images: List["UsedProductListingImage"] = Relationship(
         back_populates="used_prodct_listing",
-        sa_relationship_kwargs={"lazy": "selectin"}
+        sa_relationship_kwargs={
+            "lazy": "selectin",
+            "cascade": "all, delete-orphan",
+            "passive_deletes": True
+        }  
     )
 
     location: Optional["UsedProductListingLocation"] = Relationship(
         back_populates="used_prodct_listing",
-        sa_relationship_kwargs={"lazy": "selectin"}
+        sa_relationship_kwargs={
+            "lazy": "selectin",
+            "cascade": "all, delete-orphan",
+            "passive_deletes": True
+        }  
     )
 
     owner: Optional["User"] = Relationship(
@@ -60,7 +68,11 @@ class UsedProductListing(SQLModel, table=True):
 
     bookmarks: List["UserBookmarkUsedProductListing"] = Relationship(
         back_populates="used_product_listing",
-        sa_relationship_kwargs={"lazy": "selectin"}
+        sa_relationship_kwargs={
+            "lazy": "selectin",
+            "cascade": "all, delete-orphan",
+            "passive_deletes": True
+        }  
     )
 
     country: Optional["Country"] = Relationship(

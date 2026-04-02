@@ -56,6 +56,8 @@ def _user_used_product_listing_summary_response(
     is_bookmarked: bool = False,
     distance:     float | None = None,
 ) -> dict:
+    PRICE_UNIT_MAP = {pu["value"]: pu for pu in PRICE_UNITS}
+
     return {
          "user": {
             "user_id":               used_product_listing.owner.user_id,
@@ -73,10 +75,7 @@ def _user_used_product_listing_summary_response(
             "description":             used_product_listing.description,
             "price":                   float(used_product_listing.price),
 
-            "price_unit":              next(
-                        (pu for pu in PRICE_UNITS if pu["value"] == used_product_listing.price_unit),
-                        {"value": used_product_listing.price_unit, "name": used_product_listing.price_unit}
-                    ),
+            "price_unit":             PRICE_UNIT_MAP[used_product_listing.price_unit],
             
             "slug":                    f"{BASE_URL}/used-used_product_listing/{used_product_listing.short_code}",
             "is_bookmarked":   is_bookmarked,
@@ -103,6 +102,8 @@ def _used_product_listing_detail_response(
     is_bookmarked: bool = False,
     distance:     float | None = None,
 ) -> dict:
+    PRICE_UNIT_MAP = {pu["value"]: pu for pu in PRICE_UNITS}
+
     return {
         "user": {
             "user_id":               used_product_listing.owner.user_id,
@@ -120,10 +121,7 @@ def _used_product_listing_detail_response(
                 "description":             used_product_listing.description,
                 "price":                   float(used_product_listing.price),
 
-                "price_unit":              next(
-                                (pu for pu in PRICE_UNITS if pu["value"] == used_product_listing.price_unit),
-                                {"value": used_product_listing.price_unit, "name": used_product_listing.price_unit}
-                            ),
+                "price_unit":       PRICE_UNIT_MAP[used_product_listing.price_unit],
 
                 "country": {
                     "country_id":   used_product_listing.country.id,
@@ -161,16 +159,15 @@ def _used_product_listing_summary_response(
     is_bookmarked: bool = False,
     distance:     float | None = None,
 ) -> dict:
+    PRICE_UNIT_MAP = {pu["value"]: pu for pu in PRICE_UNITS}
+
     return {
                 "used_product_listing_id": used_product_listing.used_product_listing_id,
                 "name":                    used_product_listing.name,
                 "description":             used_product_listing.description,
                 "price":                   float(used_product_listing.price),
         
-                "price_unit":              next(
-                        (pu for pu in PRICE_UNITS if pu["value"] == used_product_listing.price_unit),
-                        {"value": used_product_listing.price_unit, "name": used_product_listing.price_unit}
-                    ),
+                "price_unit":              PRICE_UNIT_MAP[used_product_listing.price_unit],
         
                 "country": {
                     "country_id":   used_product_listing.country.id,
@@ -209,16 +206,14 @@ def _used_product_listing_summary_response(
 def _published_used_product_listing_response(
     used_product_listing:  UsedProductListing
 ) -> dict:
+    PRICE_UNIT_MAP = {pu["value"]: pu for pu in PRICE_UNITS}
     return {
         "used_product_listing_id": used_product_listing.used_product_listing_id,
         "name":                    used_product_listing.name,
         "description":             used_product_listing.description,
         "price":                   float(used_product_listing.price),
-        
-        "price_unit":              next(
-                                (pu for pu in PRICE_UNITS if pu["value"] == used_product_listing.price_unit),
-                                {"value": used_product_listing.price_unit, "name": used_product_listing.price_unit}
-                            ),
+
+        "price_unit":              PRICE_UNIT_MAP[used_product_listing.price_unit],
 
         "country": {
                     "country_id":   used_product_listing.country.id,
@@ -732,10 +727,6 @@ async def update_used_product_listing(
     uploaded_keys = []
     try:
         user_id  = request.state.user.user_id
-        media_id = await db.scalar(select(User.media_id).where(User.user_id == user_id))
-        if not media_id:
-            return send_error_response(request, 400, "Something went wrong")
-
         existing = await db.scalar(
             select(UsedProductListing)
             .options(
@@ -750,6 +741,10 @@ async def update_used_product_listing(
         )
         if not existing:
             return send_error_response(request, 404, "Invalid product listing")
+
+        media_id = existing.owner.media_id
+        if not media_id:
+            return send_error_response(request, 400, "Something went wrong")
 
         existing.name        = schema.name
         existing.description = schema.description

@@ -24,7 +24,6 @@ from schemas.service_schemas import (
     UpdateServiceThumbnailSchema,
     UpdateServiceImagesSchema,
     UpdateServicePlansSchema,
-    UpdateServiceLocationSchema,
 
     ServiceSearchSuggestionsSchema,
     UpdateIndustriesSchema
@@ -63,19 +62,21 @@ def _fmt_url(base, path):
     return f"{base}/{path}" if path else ""
 
 def _parse_plans(plans: list[ServicePlan]) -> list[dict]:
+    PRICE_UNIT_MAP = {pu["value"]: pu for pu in PRICE_UNITS}
+    DURATION_UNIT_MAP = {du["value"]: du for du in DURATION_UNITS}
     return [
-        {
+            {
             "plan_id":            p.id,
             "name":          p.name,
             "description":   p.description,
             "price":         float(p.price),
-            "price_unit":         p.price_unit,
+            "price_unit": PRICE_UNIT_MAP[p.price_unit],
+            "duration_unit": DURATION_UNIT_MAP[p.duration_unit],           
             "delivery_time": p.delivery_time,
-            "duration_unit":      p.duration_unit,
-            "features":      json.loads(p.features) if p.features else [],
-        }
-        for p in sorted(plans, key=lambda x: x.created_at)
-    ]
+                "features":      json.loads(p.features) if p.features else [],
+            }
+            for p in sorted(plans, key=lambda x: x.created_at)
+        ]
 
 def _parse_thumbnail(t: ServiceThumbnail | None) -> dict | None:
     if not t:
@@ -181,7 +182,7 @@ def _user_service_detail_response(
                     "size":      img.size,
                     "format":    img.format,
                 }
-                for img in sorted(service.images, key=lambda x: x.created_at, reverse=True)
+                for img in sorted(service.images, key=lambda x: x.created_at)
             ],
             "plans":             _parse_plans(service.plans),
             "location": {
@@ -242,7 +243,6 @@ def _published_service_response(
                 "name": service.state.name
             },
 
-            "state":             service.state,
             "status":            service.status,
             "slug":              f"{BASE_URL}/service/{service.short_code}",
             "thumbnail":         _parse_thumbnail(service.thumbnail),
@@ -255,7 +255,7 @@ def _published_service_response(
                     "size":      img.size,
                     "format":    img.format,
                 }
-                for img in sorted(service.images, key=lambda x: x.created_at, reverse=True)
+                for img in sorted(service.images, key=lambda x: x.created_at)
             ],
             "plans":    _parse_plans(service.plans),
             "location": {
@@ -739,13 +739,13 @@ async def create_service(
             service_id  = service.service_id,
             name         = plan["name"],
             description  = plan["description"],
-            price_unit   = plan["price_unit"],
+            price_unit   =  plan.price_unit,
             price        = plan["price"],
-            features     = json.dumps(plan["features"]),
-            duration_unit = plan["duration_unit"],
+            duration_unit = plan.duration_unit,
             delivery_time = plan["delivery_time"],
+            features      = json.dumps(plan["features"])
         ))
-
+            
         await db.flush() 
 
         location = schema.location    
@@ -813,6 +813,141 @@ async def get_published_services(
     except Exception:
          return send_error_response(request, 500, "Internal server error")
 
+
+async def get_published_service_info(
+    request: Request,
+    schema: ServiceIdSchema,
+    db: AsyncSession,
+):
+    try:
+        user_id = request.state.user.user_id
+
+        service = await db.scalar(
+            select(Service)
+            .where(Service.created_by == user_id, Service.service_id == schema.service_id )
+        )
+
+        if not service:
+            return send_error_response(request, 404, "Service not exist")
+    
+        return send_json_response(200, "Services retrieved", data={
+            "title": service.title,
+            "short_description": service.short_description,
+            "long_description": service.long_description,
+            "industry":  {
+                "industry_id":   service.industry.industry_id,
+                "name": service.industry.name
+            }
+        })
+    except Exception:
+        import traceback
+        import sys
+        traceback.print_exc(file=sys.stderr)
+        sys.stderr.flush()
+        return send_error_response(request, 500, "Internal server error")
+
+async def get_published_service_thumbnail(
+    request: Request,
+    schema: ServiceIdSchema,
+    db: AsyncSession,
+):
+    try:
+        user_id = request.state.user.user_id
+
+        service = await db.scalar(
+            select(Service)
+            .where(
+                Service.created_by == user_id,
+                Service.service_id == schema.service_id
+            )
+            .options(selectinload(Service.thumbnail))
+        )
+
+        if not service:
+            return send_error_response(request, 404, "Service not exist")
+
+        return send_json_response(
+            200,
+            "Thumbnail retrieved",
+            data=_parse_thumbnail(service.thumbnail)
+        )
+    except Exception:
+        return send_error_response(request, 500, "Internal server error")
+
+async def get_published_service_images(
+    request: Request,
+    schema: ServiceIdSchema,
+    db: AsyncSession,
+):
+    try:
+        user_id = request.state.user.user_id
+
+        service = await db.scalar(
+            select(Service)
+            .where(
+                Service.created_by == user_id,
+                Service.service_id == schema.service_id
+            )
+            .options(selectinload(Service.images))
+        )
+
+        if not service:
+            return send_error_response(request, 404, "Service not exist")
+
+        return send_json_response(
+            200,
+            "Images retrieved",
+            data=
+               [
+                {
+                    "image_id": image.id,
+                    "url": image.url,
+                    "width": image.width,
+                    "height": image.height,
+                    "size": image.size,
+                    "format": image.format,
+                }
+
+                for image in sorted(service.images, key=lambda x: x.created_at)
+                ]
+        )
+
+    except Exception:
+        import traceback
+        import sys
+        traceback.print_exc(file=sys.stderr)
+        sys.stderr.flush()
+        return send_error_response(request, 500, "Internal server error")    
+
+async def get_published_service_plans(
+    request: Request,
+    schema: ServiceIdSchema,
+    db: AsyncSession,
+):
+    try:
+        user_id = request.state.user.user_id
+
+        service = await db.scalar(
+            select(Service)
+            .where(
+                Service.created_by == user_id,
+                Service.service_id == schema.service_id
+            )
+            .options(selectinload(Service.plans))
+        )
+
+        if not service:
+            return send_error_response(request, 404, "Service not exist")
+
+        return send_json_response(
+            200,
+            "Plans retrieved",
+            data=_parse_plans(service.plans)
+        )
+
+    except Exception:
+        return send_error_response(request, 500, "Internal server error")
+    
 async def update_service_info(
     request:           Request,
     schema: UpdateServiceInfoSchema,
@@ -827,7 +962,7 @@ async def update_service_info(
             return send_error_response(request, 404, "Service not exist")
 
         industry = await db.scalar(
-            select(ServiceIndustry).where(ServiceIndustry.industry_id == schema.industry_id)
+            select(ServiceIndustry).where(ServiceIndustry.industry_id == schema.industry)
         )
         if not industry:
             return send_error_response(request, 400, "Invalid industry")
@@ -839,27 +974,16 @@ async def update_service_info(
         db.add(service)
         await db.flush()
 
-        return send_json_response(200, "Service updated", data={
-            "service_id":        service.service_id,
+        return send_json_response(200, "Service info updated", data={
             "title":             service.title,
             "short_description": service.short_description,
             "long_description":  service.long_description,
 
-            "industry_id": {
-                "id":   service.industry.industry_id,
+            "industry": {
+                "industry_id":   service.industry.industry_id,
                 "name": service.industry.name
             } if service.industry else None,
             
-            "country_id": {
-                "id":   service.country.id,
-                "name": service.country.name
-            } if service.country else None,
-
-            "state_id": {
-                "id":   service.state.id,
-                "name": service.state.name
-            } if service.state else None,
-
             "status":            service.status,
         })
     except Exception:
@@ -929,49 +1053,80 @@ async def update_service_images(
     schema: UpdateServiceImagesSchema,
     db:              AsyncSession,
 ):
+    images = schema.images or []
     uploaded_keys = []
     try:
         user_id = request.state.user.user_id
-        service = await db.scalar(
+        existing = await db.scalar(
             select(Service)
             .options(selectinload(Service.owner))
             .options(selectinload(Service.images))
             .where(Service.service_id == schema.service_id, Service.created_by == user_id)
         )
-        if not service:
+        if not existing:
             return send_error_response(request, 404, "Service not exist")
 
-        media_id = service.owner.media_id
+        media_id = existing.owner.media_id
         if not media_id:
             return send_error_response(request, 400, "Something went wrong")
 
-        old_images = service.images
+        keep_ids = set(schema.keep_image_ids or [])
+        replace_ids = schema.replace_image_ids or []
+        replace_images = schema.replace_images or []
+        deleted_keys = []
 
-        for img in old_images:
-            if img.id not in schema.keep_image_ids:
-                await delete_from_s3(img.url)
+        # delete images not in keep_ids and not in replace_ids
+        for img in existing.images:
+            if img.id not in keep_ids and img.id not in set(replace_ids):
+                deleted_keys.append(img.url)
                 await db.delete(img)
 
-        images  = schema.images or []  
+        # add new images
         for image in images:
             contents = await image.read()
-            key      = f"media/{media_id}/services/{service.service_id}/images/{uuid.uuid4()}-{image.filename}"
+            key = f"media/{media_id}/services/{existing.service_id}/{uuid.uuid4()}-{image.filename}"
             await upload_to_s3(contents, key, image.content_type)
             uploaded_keys.append(key)
 
             img = Image.open(io.BytesIO(contents))
             width, height = img.size
+
             db.add(ServiceImage(
-                service_id=service.service_id,
-                url=key,
-                width=width, 
-                height=height, 
-                size=len(contents), 
-                format=image.content_type or "",
+                service_id = existing.service_id,
+                url          = key,
+                width        = width,
+                height       = height,
+                size         = len(contents),
+                format       = image.content_type or "",
             ))
+
+        # replace existing images — zip ids with files
+        for image_id, image in zip(replace_ids, replace_images):
+            existing_img = next((img for img in existing.images if img.id == image_id), None)
+            if not existing_img:
+                continue
+
+            contents = await image.read()
+            new_key = f"media/{media_id}/services/{existing.service_id}/{uuid.uuid4()}-{image.filename}"
+            await upload_to_s3(contents, new_key, image.content_type)
+            uploaded_keys.append(new_key)
+
+            old_key = existing_img.url
+            deleted_keys.append(old_key)
+
+            pil_img = Image.open(io.BytesIO(contents))
+            width, height = pil_img.size
+
+            existing_img.url    = new_key
+            existing_img.width  = width
+            existing_img.height = height
+            existing_img.size   = len(contents)
+            existing_img.format = image.content_type or ""
+            db.add(existing_img)
+
         await db.flush()
 
-        await db.refresh(service, attribute_names=["images"])
+        await db.refresh(existing, attribute_names=["images"])
         return send_json_response(200, "Images updated", data=[
             {
                 "image_id":  img.id,
@@ -981,9 +1136,13 @@ async def update_service_images(
                 "size":      img.size,
                 "format":    img.format,
             }
-            for img in service.images
+            for img in existing.images
         ])
     except Exception:
+        import traceback
+        import sys
+        traceback.print_exc(file=sys.stderr)
+        sys.stderr.flush()
         await db.rollback() 
         for key in uploaded_keys:
             await delete_from_s3(key)
@@ -1055,48 +1214,6 @@ async def update_service_plans(
     except Exception:
         return send_error_response(request, 500, "Internal server error")
 
-async def update_service_location(
-    request:       Request,
-    schema:       UpdateServiceLocationSchema,
-    db:            AsyncSession,
-):
-    try:
-        user_id = request.state.user.user_id
-        service = await db.scalar(
-            select(Service)
-            .options(selectinload(Service.location))
-            .where(Service.service_id == schema.service_id, Service.created_by == user_id)
-        )
-        if not service:
-            return send_error_response(request, 404, "Service not found")
-
-        loc = service.location
-        if loc:
-            loc.latitude      = schema.latitude
-            loc.longitude     = schema.longitude
-            loc.geo           = schema.geo
-            loc.location_type = schema.location_type
-            db.add(loc)
-        else:
-            db.add(ServiceLocation(
-                service_id=schema.service_id,
-                latitude=schema.latitude,
-                longitude=schema.longitude,
-                geo=schema.geo,
-                location_type=schema.location_type,
-            ))
-
-        await db.flush()
-        await db.refresh(service)
-        return send_json_response(200, "Location updated", data={
-            "latitude":      service.location.latitude,
-            "longitude":     service.location.longitude,
-            "geo":           service.location.geo,
-            "location_type": service.location.location_type,
-        })
-    except Exception:
-        return send_error_response(request, 500, "Internal server error")
-
 async def delete_service(request: Request, schema: ServiceIdSchema, db: AsyncSession):
     try:
         user_id = request.state.user.user_id
@@ -1165,7 +1282,7 @@ async def get_industries_options(request: Request, db: AsyncSession):
         result = await db.execute(select(ServiceIndustry))
         industries = result.scalars().all()
         return send_json_response(200, "Service industries retrieved", data=[
-            {"industry_id": i.industry_id, "name": i.industry_name, "description": i.description}
+            {"industry_id": i.industry_id, "name": i.name, "description": i.description}
             for i in industries
         ])
     except Exception:
@@ -1186,7 +1303,7 @@ async def get_user_industries(request: Request, db: AsyncSession):
         return send_json_response(200, "Industries retrieved", data=[
             {
                 "industry_id":   i.industry_id,
-                "name": i.industry_name,
+                "name": i.name,
                 "description":   i.description,
                 "is_selected":   i.industry_id in selected_industries_ids  
             }
@@ -1226,7 +1343,7 @@ async def update_industries(request: Request, schema: UpdateIndustriesSchema, db
         return send_json_response(200, "Industries updated", data=[
             {
                 "industry_id":   i.industry_id,
-                "name": i.industry_name,
+                "name": i.name,
                 "description":   i.description,
                 "is_selected":   i.industry_id in selected_industries_ids  
             }
@@ -1254,7 +1371,7 @@ async def get_publish_meta_options(request: Request, db: AsyncSession):
                 "price_units": PRICE_UNITS,
                 "duration_units": DURATION_UNITS,
                 "industries": [
-                    {"industry_id": i.id, "name": i.name}
+                    {"industry_id": i.industry_id, "name": i.name}
                     for i in industries
                 ]
             }

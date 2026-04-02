@@ -380,7 +380,7 @@ class GetPublishedServicesSchema(BaseModel):
         return v
 
 class UpdateServiceInfoSchema(BaseModel):
-    service_id:        int = 0 
+    service_id:        int
     title:             str
     short_description: str
     long_description:  str
@@ -464,8 +464,10 @@ async def update_thumbnail_form(
 
 class UpdateServiceImagesSchema(BaseModel):
     service_id: int
-    keep_image_ids: Optional[List[int]] = None
-    images:                 Optional[List[UploadFile]] = None
+    keep_image_ids:          Optional[List[int]] = None
+    images:                  Optional[List[UploadFile]] = None
+    replace_image_ids:   Optional[List[int]]        = None
+    replace_images:           Optional[List[UploadFile]] = None
 
     @field_validator("service_id")
     def validate_service_id(cls, v):
@@ -473,31 +475,42 @@ class UpdateServiceImagesSchema(BaseModel):
             raise ValueError("Invalid service id format")
         return v
 
+  
     @field_validator("keep_image_ids")
     def validate_keep_image_ids(cls, v):
         if v is None:
             return None
         if not isinstance(v, list):
             v = [v]
-        result = []
-        for id in v:
-            n = int(id)
-            result.append(n)
-        return result
-    
+        return [int(i) for i in v]
+     
     @model_validator(mode="after")
-    def validate_images_and_keep(self):
-        has_new_images  = self.images and len(self.images) > 0
-        has_kept_images = self.keep_image_ids and len(self.keep_image_ids) > 0
-        if not has_new_images and not has_kept_images:
-            raise ValueError("At least 1 image is required")
+    def validate_images(self):
+        has_kept_images = bool(self.keep_image_ids)
+        has_replace_images = bool(self.replace_images)
+        has_replace_ids = bool(self.replace_image_ids)
 
-        if self.images:
-            for image in self.images:
-                if image.content_type not in ALLOWED_TYPES:
-                    raise ValueError(f"Invalid file type: {image.filename}")
-                if image.size and image.size > MAX_IMAGE_SIZE:
-                    raise ValueError(f"Image {image.filename} must be under 1MB")
+        if has_replace_images and not has_replace_ids:
+            raise ValueError("replace_image_ids must be provided with replace_images")
+
+        if has_replace_ids and not has_replace_images:
+            raise ValueError("replace_images must be provided with replace_image_ids")
+
+        if has_replace_images and has_replace_ids:
+            if len(self.replace_images) != len(self.replace_image_ids):
+                raise ValueError("replace_images and replace_image_ids must have the same length")
+
+        if has_kept_images and has_replace_ids:
+            overlap = set(self.keep_image_ids) & set(self.replace_image_ids)
+            if overlap:
+                raise ValueError(f"Image IDs cannot be in both keep_image_ids and replace_image_ids: {overlap}")
+
+        for image in (self.images or []) + (self.replace_images or []):
+            if image.content_type not in ALLOWED_TYPES:
+                raise ValueError(f"Invalid file type: {image.filename}")
+            if image.size and image.size > MAX_IMAGE_SIZE:
+                raise ValueError(f"Image {image.filename} must be under 1MB")
+
         return self
 
 async def update_service_images_form(
@@ -524,39 +537,6 @@ class UpdateServicePlansSchema(BaseModel):
             raise ValueError("At least 1 plan is required")
         if len(v) > 3:
             raise ValueError("Maximum 3 plans allowed")
-        return v
-
-class UpdateServiceLocationSchema(BaseModel):
-    service_id: int = 0
-    latitude:      float
-    longitude:     float
-    geo:           str
-    location_type: str
-
-    @field_validator("latitude")
-    def validate_latitude(cls, v):
-        if not -90 <= v <= 90:
-            raise ValueError("Latitude must be a valid float between -90 and 90")
-        return v
-
-    @field_validator("longitude")
-    def validate_longitude(cls, v):
-        if not -180 <= v <= 180:
-            raise ValueError("Longitude must be a valid float between -180 and 180")
-        return v
-
-    @field_validator("geo")
-    def validate_geo(cls, v):
-        v = v.strip()
-        if not v:
-            raise ValueError("Geo cannot be empty")
-        return v
-
-    @field_validator("location_type")
-    def validate_location_type(cls, v):
-        v = v.strip()
-        if not v:
-            raise ValueError("Location type cannot be empty")
         return v
 
 class PublishServiceStateOptionsSchema(BaseModel):

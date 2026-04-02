@@ -54,22 +54,38 @@ class Service(SQLModel, table=True):
 
     thumbnail: Optional["ServiceThumbnail"] = Relationship(
             back_populates="service",
-            sa_relationship_kwargs={"lazy": "selectin"}
+            sa_relationship_kwargs={
+                "lazy": "selectin",
+                "cascade": "all, delete-orphan",
+                "passive_deletes": True
+            }  
         )
     
     images: List["ServiceImage"] = Relationship(
         back_populates="service",
-        sa_relationship_kwargs={"lazy": "selectin"}
+        sa_relationship_kwargs={
+                "lazy": "selectin",
+                "cascade": "all, delete-orphan",
+                "passive_deletes": True
+        }  
     )
 
     plans: List["ServicePlan"] = Relationship(
         back_populates="service",
-        sa_relationship_kwargs={"lazy": "selectin"}
+        sa_relationship_kwargs={
+                "lazy": "selectin",
+                "cascade": "all, delete-orphan",
+                "passive_deletes": True
+        }  
     )
 
     location: Optional["ServiceLocation"] = Relationship(
         back_populates="service",
-        sa_relationship_kwargs={"lazy": "selectin"}
+        sa_relationship_kwargs={
+                "lazy": "selectin",
+                "cascade": "all, delete-orphan",
+                "passive_deletes": True
+        }  
     )
 
     owner: Optional["User"] = Relationship(
@@ -79,7 +95,11 @@ class Service(SQLModel, table=True):
 
     bookmarks: List["UserBookmarkService"] = Relationship(
         back_populates="service",
-        sa_relationship_kwargs={"lazy": "selectin"}
+        sa_relationship_kwargs={
+                "lazy": "selectin",
+                "cascade": "all, delete-orphan",
+                "passive_deletes": True
+        }  
     )
 
     industry: Optional["ServiceIndustry"] = Relationship(
@@ -209,7 +229,7 @@ class ServiceIndustry(SQLModel, table=True):
     __tablename__ = "service_industries"
 
     industry_id:   int           = Field(primary_key=True)
-    industry_name: str           = Field(max_length=255)
+    name: str           = Field(max_length=255)
     description:   Optional[str] = Field(default=None)
     created_at:    datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at:    datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))

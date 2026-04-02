@@ -136,7 +136,6 @@ async def get_published_used_product_listings(
 ):
     return await used_product_listing_controller.get_published_used_product_listing_by_used_product_listing_id(request, schema, db)
 
-
 @router.get("/publish/meta/options")
 async def get_publish_countries_options(
     request: Request,
@@ -144,15 +143,6 @@ async def get_publish_countries_options(
     _:       None = Depends(authenticate_token),
 ):
     return await used_product_listing_controller.get_publish_meta_options(request, db)
-
-@router.get("/publish/location/countries/options")
-async def get_publish_countries_options(
-    request: Request,
-    db:      AsyncSession = Depends(get_db),
-    _:       None = Depends(authenticate_token),
-):
-    return await used_product_listing_controller.get_publish_countries_options(request, db)
-
 
 @router.get("/publish/location/states/options")
 async def get_publish_states_options(

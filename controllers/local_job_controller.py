@@ -58,6 +58,7 @@ def _user_local_job_summary_response(
     is_applied:   bool = False,
     distance:     float | None = None,
 ) -> dict:
+    SALARY_UNITS_MAP = {pu["value"]: pu for pu in SALARY_UNITS}
     return {
         "user": {
             "user_id":               local_job.owner.user_id,
@@ -73,7 +74,7 @@ def _user_local_job_summary_response(
             "local_job_id":    local_job.local_job_id,
             "title":           local_job.title,
             "description":     local_job.description,
-            "salary_unit":     local_job.salary_unit,
+            "salary_unit":     SALARY_UNITS_MAP[local_job.salary_unit],
             "salary_min":      local_job.salary_min,
             "salary_max":      local_job.salary_max,
             "slug":            f"{BASE_URL}/local-jobs/{local_job.short_code}",
@@ -103,6 +104,12 @@ def _local_job_detail_response(
     is_applied:   bool = False,
     distance:     float | None = None,
 ) -> dict:
+    SALARY_UNITS_MAP = {pu["value"]: pu for pu in SALARY_UNITS}
+    MARITAL_STATUS_MAP = {
+        ms["value"]: ms for ms in MARITAL_STATUS_OPTIONS
+    }
+    statuses = json.loads(local_job.marital_statuses)
+
     return {
         "user": {
             "user_id":               local_job.owner.user_id,
@@ -123,11 +130,10 @@ def _local_job_detail_response(
             "age_max":         local_job.age_max,
             
             "marital_statuses": [
-                next(ms for ms in MARITAL_STATUS_OPTIONS if ms["value"] == status)
-                for status in (json.loads(local_job.marital_statuses) if isinstance(local_job.marital_statuses, str) else local_job.marital_statuses)
+                MARITAL_STATUS_MAP[status] for status in statuses
             ],
             
-            "salary_unit":              next(pu for pu in SALARY_UNITS if pu["value"] == local_job.salary_unit),
+            "salary_unit":     SALARY_UNITS_MAP[local_job.salary_unit],
 
             "salary_min":      local_job.salary_min,
             "salary_max":      local_job.salary_max,
@@ -167,6 +173,13 @@ def _local_job_detail_response(
 def _published_local_job_response(
     local_job:          LocalJob,
 ) -> dict:
+    SALARY_UNITS_MAP = {pu["value"]: pu for pu in SALARY_UNITS}
+    MARITAL_STATUS_MAP = {
+        ms["value"]: ms for ms in MARITAL_STATUS_OPTIONS
+    }
+
+    statuses = json.loads(local_job.marital_statuses)
+
     return {
             "local_job_id":    local_job.local_job_id,
             "title":           local_job.title,
@@ -175,12 +188,11 @@ def _published_local_job_response(
             "age_min":         local_job.age_min,
             "age_max":         local_job.age_max,
 
-            "marital_statuses": [
-                next(ms for ms in MARITAL_STATUS_OPTIONS if ms["value"] == status)
-                for status in (json.loads(local_job.marital_statuses) if isinstance(local_job.marital_statuses, str) else local_job.marital_statuses)
+           "marital_statuses": [
+                MARITAL_STATUS_MAP[status] for status in statuses
             ],
             
-            "salary_unit":              next(pu for pu in SALARY_UNITS if pu["value"] == local_job.salary_unit),
+            "salary_unit":     SALARY_UNITS_MAP[local_job.salary_unit],
             
             "salary_min":      local_job.salary_min,
             "salary_max":      local_job.salary_max,
@@ -610,8 +622,13 @@ async def update_local_job(
                 LocalJob.created_by   == user_id,
             )
         )
+        
         if not existing:
-            return send_error_response(request, 404, "Local job not found")
+            return send_error_response(request, 404, "Local job not exist")
+        
+        media_id = existing.owner.media_id
+        if not media_id:
+            return send_error_response(request, 400, "Something went wrong")
 
         existing.title            = schema.title
         existing.description      = schema.description
