@@ -127,7 +127,7 @@ def _user_service_summary_response(
             "starting_from": {
                     "price":      float(min(service.plans, key=lambda p: p.price).price),
                     "price_unit": min(service.plans, key=lambda p: p.price).price_unit,
-                } if service.plans else None
+                }
         }
     }
 
@@ -215,7 +215,7 @@ def _service_summary_response(
             "starting_from": {
                     "price":      float(min(service.plans, key=lambda p: p.price).price),
                     "price_unit": min(service.plans, key=lambda p: p.price).price_unit,
-                } if service.plans else None
+                }
     }
 
 def _published_service_response(
@@ -517,10 +517,6 @@ async def get_services(request: Request, schema: GetServicesSchema, db: AsyncSes
         data = await _query_services(db=db, user_id=user_id, page_size=page_size, industries=user_industry_ids, query=s, user_lat=lat, user_lon=lon, next_token=next_token)
         return send_json_response(200, "Services retrived", data= data)
     except Exception:
-        import traceback
-        import sys
-        traceback.print_exc(file=sys.stderr)
-        sys.stderr.flush()
         return send_error_response(request, 500, "Internal server error")    
 
 async def get_service_by_service_id(request: Request, schema: ServiceIdSchema, db: AsyncSession):
@@ -765,10 +761,6 @@ async def create_service(
         await db.refresh(service, attribute_names=[ "thumbnail", "images", "plans", "location", "owner"])    
         return send_json_response(200, "Service published", data=_published_service_response(service))
     except Exception:
-        import traceback
-        import sys
-        traceback.print_exc(file=sys.stderr)
-        sys.stderr.flush()
         await db.rollback() 
         for key in uploaded_keys:
             await delete_from_s3(key)
@@ -840,10 +832,6 @@ async def get_published_service_info(
             }
         })
     except Exception:
-        import traceback
-        import sys
-        traceback.print_exc(file=sys.stderr)
-        sys.stderr.flush()
         return send_error_response(request, 500, "Internal server error")
 
 async def get_published_service_thumbnail(
@@ -913,10 +901,6 @@ async def get_published_service_images(
         )
 
     except Exception:
-        import traceback
-        import sys
-        traceback.print_exc(file=sys.stderr)
-        sys.stderr.flush()
         return send_error_response(request, 500, "Internal server error")    
 
 async def get_published_service_plans(
@@ -1139,10 +1123,6 @@ async def update_service_images(
             for img in existing.images
         ])
     except Exception:
-        import traceback
-        import sys
-        traceback.print_exc(file=sys.stderr)
-        sys.stderr.flush()
         await db.rollback() 
         for key in uploaded_keys:
             await delete_from_s3(key)
@@ -1407,8 +1387,4 @@ async def get_publish_states_options(
             for s in states
         ])
     except Exception:
-        import traceback
-        import sys
-        traceback.print_exc(file=sys.stderr)
-        sys.stderr.flush()
         return send_error_response(request, 500, "Internal server error")

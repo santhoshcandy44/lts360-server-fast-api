@@ -1,6 +1,6 @@
 from fastapi.exceptions import RequestValidationError
 from pydantic import BaseModel, ValidationError, field_validator, model_validator
-from typing import Annotated, Optional, List, Literal
+from typing import Optional, List, Literal
 from fastapi import Form, Query, UploadFile, File
 import json
 
@@ -16,7 +16,6 @@ VALID_INDIAN_STATES = [
 
 MAX_IMAGE_SIZE    = 1 * 1024 * 1024  
 ALLOWED_TYPES     = ["image/jpeg", "image/png", "image/webp"]
-
 
 class GuestGetServicesSchema(BaseModel):
     s:              Optional[str]        = None
@@ -144,6 +143,24 @@ class GetServicesByUserIdSchema(BaseModel):
             raise ValueError("Invalid page size format")
         return v
 
+class Location(BaseModel):
+    geo: str
+    latitude: float
+    longitude: float
+    location_type: Literal["approximate", "precise"]
+
+    @field_validator("latitude")
+    def validate_lat(cls, v):
+        if not -90 <= v <= 90:
+            raise ValueError("Latitude must be between -90 and 90")
+        return v
+
+    @field_validator("longitude")
+    def validate_lng(cls, v):
+        if not -180 <= v <= 180:
+            raise ValueError("Longitude must be between -180 and 180")
+        return v
+
 class CreateServiceSchema(BaseModel):
     title:             str
     short_description: str
@@ -152,7 +169,7 @@ class CreateServiceSchema(BaseModel):
     country:           int
     state:             int
     plans:             str
-    location:          str
+    location:          Location
     images:            List[UploadFile] = None
     thumbnail:         UploadFile= None
 
@@ -200,26 +217,6 @@ class CreateServiceSchema(BaseModel):
         for plan in parsed:
             if not isinstance(plan, dict):
                 raise ValueError("Each plan must be an object")
-        return parsed
-
-    @field_validator("location")
-    def validate_location(cls, v):
-        try:
-            parsed = json.loads(v)
-        except Exception:
-            raise ValueError("Location must be an object")
-        if not isinstance(parsed, dict):
-            raise ValueError("Location must be an object")
-        lat = parsed.get("latitude")
-        lng = parsed.get("longitude")
-        if lat is None:
-            raise ValueError("Latitude is required")
-        if lng is None:
-            raise ValueError("Longitude is required")
-        if not -90 <= float(lat) <= 90:
-            raise ValueError("Latitude must be a number between -90 and 90")
-        if not -180 <= float(lng) <= 180:
-            raise ValueError("Longitude must be a number between -180 and 180")
         return parsed
 
     @model_validator(mode="after")
@@ -331,6 +328,8 @@ async def create_service_form(
     thumbnail:         UploadFile           = Form(...)
 ) -> CreateServiceSchema:
     try:
+        parsed_location = Location.model_validate_json(location)
+
         return CreateServiceSchema(
         title             = title,
         short_description = short_description,
@@ -339,7 +338,7 @@ async def create_service_form(
         country           = country,
         state             = state,
         plans             = plans,
-        location          = location,
+        location          = parsed_location,
         images            = images,
         thumbnail         = thumbnail
     )
@@ -428,8 +427,8 @@ class UpdateServiceThumbnailSchema(BaseModel):
 
 async def update_thumbnail_form(
     service_id: int,    
-    thumbnail_id:            Annotated[int, Form(...)],
-    thumbnail:           Annotated[Optional[UploadFile], File()] = None,
+    thumbnail_id:           int = Form(...),
+    thumbnail:         Optional[UploadFile] = File(None),
 ) -> UpdateServiceThumbnailSchema:
     try:
         return UpdateServiceThumbnailSchema(
@@ -493,8 +492,8 @@ class UpdateServiceImagesSchema(BaseModel):
 
 async def update_service_images_form(
     service_id: int,
-    keep_image_ids: Annotated[List[int], Form(...)],
-    images:           Annotated[List[UploadFile], File()] = None,
+    keep_image_ids: List[int] = Form(...),
+    images:        List[UploadFile] = File(None),
 ) -> UpdateServiceImagesSchema:
     try:
         return UpdateServiceImagesSchema(
@@ -506,7 +505,7 @@ async def update_service_images_form(
         raise RequestValidationError(e.errors())
     
 class UpdateServicePlansSchema(BaseModel):
-    service_id: int = 0
+    service_id: int
     plans: List[Plan]
 
     @field_validator("plans")

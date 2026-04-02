@@ -108,6 +108,24 @@ class GetPublishedUsedProductListingsSchema(BaseModel):
             raise ValueError("Page size must be a positive integer")
         return v
 
+class Location(BaseModel):
+    geo: str
+    latitude: float
+    longitude: float
+    location_type: Literal["approximate", "precise"]
+
+    @field_validator("latitude")
+    def validate_lat(cls, v):
+        if not -90 <= v <= 90:
+            raise ValueError("Latitude must be between -90 and 90")
+        return v
+
+    @field_validator("longitude")
+    def validate_lng(cls, v):
+        if not -180 <= v <= 180:
+            raise ValueError("Longitude must be between -180 and 180")
+        return v
+
 class CreateUsedProductListingSchema(BaseModel):
     name:                    str
     description:             str
@@ -115,7 +133,7 @@ class CreateUsedProductListingSchema(BaseModel):
     state:                   int
     price:                   float
     price_unit:              str
-    location:                str
+    location:                Location
     images:                  List[UploadFile]
 
     @field_validator("name")
@@ -141,24 +159,6 @@ class CreateUsedProductListingSchema(BaseModel):
         if v < 0:
             raise ValueError("Price must be >= 0")
         return v
-
-    @field_validator("location")
-    def validate_location(cls, v):
-        try:
-            parsed = json.loads(v)
-        except Exception:
-            raise ValueError("Location must be a valid JSON object")
-        if not isinstance(parsed, dict):
-            raise ValueError("Location must be a valid JSON object")
-        lat = parsed.get("latitude")
-        lng = parsed.get("longitude")
-        if lat is None or lng is None:
-            raise ValueError("Location must have latitude and longitude")
-        if not -90 <= float(lat) <= 90:
-            raise ValueError("Latitude must be between -90 and 90")
-        if not -180 <= float(lng) <= 180:
-            raise ValueError("Longitude must be between -180 and 180")
-        return parsed  
     
     @model_validator(mode="after")
     def validate_images_and_keep(self):
@@ -184,6 +184,7 @@ async def create_used_product_listing_form(
     images:                  List[UploadFile]    =  File(...),
 ) -> CreateUsedProductListingSchema:
     try:
+        parsed_location = Location.model_validate_json(location)
         return CreateUsedProductListingSchema(
             name                    = name,
             description             = description,
@@ -191,7 +192,7 @@ async def create_used_product_listing_form(
             state                   = state,
             price                   = price,
             price_unit              = price_unit,
-            location                = location,
+            location                = parsed_location,
             images                  = images
         )
     except ValidationError as e:

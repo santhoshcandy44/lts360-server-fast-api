@@ -17,6 +17,16 @@ from config import PROFILE_BASE_URL, MEDIA_BASE_URL, BASE_URL
 from helpers.response_helper import send_json_response, send_error_response
 from utils.pagination.cursor import encode_cursor, decode_cursor
 
+PRICE_UNITS = [
+    {"value": "INR", "name": "INR"},
+    {"value": "USD", "name": "USD"},
+]
+
+SALARY_UNITS = [
+    {"value": "INR", "name": "INR"},
+    {"value": "USD", "name": "USD"},
+]
+
 def _fmt_url(base, path):
     return f"{base}/{path}" if path else ""
 
@@ -175,10 +185,11 @@ async def get_bookmarks(request: Request, params, db: AsyncSession):
                 Service.title,
                 Service.short_description,
                 Service.long_description,
-                ServiceIndustry.industry_id.label("industry"),
+                ServiceIndustry.industry_id.label("industry_id"),
+                ServiceIndustry.name.label("industry_name"),
                 Service.short_code,
-                Service.country,
-                Service.state,
+                Service.country_id,
+                Service.state_id,
                 null().label("images"),
                 svc_plans,
                 svc_thumbnail,
@@ -227,10 +238,13 @@ async def get_bookmarks(request: Request, params, db: AsyncSession):
                 null().label("title"),
                 null().label("short_description"),
                 null().label("long_description"),
-                null().label("industry"),
+
+                null().label("industry_id"),
+                null().label("industry_name"),
+                
                 UsedProductListing.short_code,
-                UsedProductListing.country,
-                UsedProductListing.state,
+                UsedProductListing.country_id,
+                UsedProductListing.state_id,
                 _agg_images(UsedProductListingImage).label("images"),
                 null().label("plans"),
                 null().label("thumbnail"),
@@ -277,10 +291,13 @@ async def get_bookmarks(request: Request, params, db: AsyncSession):
                 LocalJob.title,
                 null().label("short_description"),
                 null().label("long_description"),
-                null().label("industry"),
+        
+                null().label("industry_id"),
+                null().label("industry_name"),
+
                 LocalJob.short_code,
-                LocalJob.country,
-                LocalJob.state,
+                LocalJob.country_id,
+                LocalJob.state_id,
                 _agg_images(LocalJobImage).label("images"),
                 null().label("plans"),
                 null().label("thumbnail"),
@@ -361,11 +378,10 @@ async def get_bookmarks(request: Request, params, db: AsyncSession):
                 if row.type == "service":
                     thumbnail = _parse_thumbnail(row.thumbnail)
                     plans = _parse_plans(row.plans)
-                    min_plan = min(plans, key=lambda p: p["price"]) if plans else None
                     starting_from = {
-                        "price":      float(min_plan["price"]),
-                        "price_unit": min_plan["price_unit"],
-                    } if plans else None
+                      "price":      float(min(plans, key=lambda p: p["price"])["price"]),
+                      "price_unit": min(plans, key=lambda p: p["price"])["price_unit"],
+                    }
                     
                     items[item_key] = {
                         "type": "service",
@@ -374,7 +390,10 @@ async def get_bookmarks(request: Request, params, db: AsyncSession):
                             "service_id":        row.item_id,
                             "title":             row.title,
                             "short_description": row.short_description,
-                            "industry":          row.industry,
+                            "industry":          {
+                                                    "industry_id":   row.industry_id,
+                                                    "name": row.industry_name
+                                                },
                             "slug":              f"{BASE_URL}/service/{row.short_code}",
                             "is_bookmarked":     bool(row.is_bookmarked),
                             "starting_from":     starting_from,
@@ -383,6 +402,8 @@ async def get_bookmarks(request: Request, params, db: AsyncSession):
                         },
                     }
                 elif row.type == "used_product_listing":
+                    PRICE_UNIT_MAP = {pu["value"]: pu for pu in PRICE_UNITS}
+
                     items[item_key] = {
                         "type": "used_product_listing",
                         "user": publisher,
@@ -391,7 +412,7 @@ async def get_bookmarks(request: Request, params, db: AsyncSession):
                             "name":          row.name,
                             "description":   row.description,
                             "price":         float(row.price),
-                            "price_unit":    row.price_unit,
+                            "price_unit":    PRICE_UNIT_MAP[row.price_unit],
                             "slug":          f"{BASE_URL}/used-product/{row.short_code}",
                             "is_bookmarked": bool(row.is_bookmarked),
                             "images":        _parse_images(row.images),
@@ -399,6 +420,8 @@ async def get_bookmarks(request: Request, params, db: AsyncSession):
                         },
                     }
                 elif row.type == "local_job":
+                    SALARY_UNITS_MAP = {pu["value"]: pu for pu in SALARY_UNITS}
+
                     items[item_key] = {
                         "type": "local_job",
                         "user": publisher,
@@ -406,7 +429,7 @@ async def get_bookmarks(request: Request, params, db: AsyncSession):
                             "local_job_id":      row.item_id,
                             "title":             row.title,
                             "description":       row.description,
-                            "salary_unit":       row.salary_unit,
+                            "salary_unit":       SALARY_UNITS_MAP[row.salary_unit],
                             "salary_min":        row.salary_min,
                             "salary_max":        row.salary_max,
                             "slug":              f"{BASE_URL}/local-job/{row.short_code}",

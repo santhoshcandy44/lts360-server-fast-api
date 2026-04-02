@@ -669,10 +669,10 @@ async def create_used_product_listing(
         location = schema.location
         db.add(UsedProductListingLocation(
                 used_product_listing_id  = new_used_product_listing.used_product_listing_id,
-                latitude      = location["latitude"],
-                longitude     = location["longitude"],
-                geo           = location["geo"],
-                location_type = location["location_type"],
+                latitude      = location.latitude,
+                longitude     = location.longitude,
+                geo           = location.geo,
+                location_type = location.location_type,
         ))
 
         await db.flush()
@@ -680,10 +680,6 @@ async def create_used_product_listing(
         await db.refresh(new_used_product_listing, attribute_names=["images", "location", "owner"])    
         return send_json_response(200, "Used product listing published", data=_published_used_product_listing_response(new_used_product_listing))
     except Exception:
-        import traceback
-        import sys
-        traceback.print_exc(file=sys.stderr)
-        sys.stderr.flush()
         await db.rollback()
         for key in uploaded_keys:
             await delete_from_s3(key)

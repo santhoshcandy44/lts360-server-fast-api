@@ -47,8 +47,6 @@ SALARY_UNITS = [
     {"value": "USD", "name": "USD"},
 ]
 
-
-
 def _fmt_url(base, path):
     return f"{base}/{path}" if path else ""
 
@@ -579,10 +577,10 @@ async def create_local_job(
         location = schema.location
         db.add(LocalJobLocation(
             local_job_id = new_local_job.local_job_id,
-            latitude     = location["latitude"],
-            longitude    = location["longitude"],
-            geo          = location["geo"],
-            location_type = location["location_type"],
+            latitude     = location.latitude,
+            longitude    = location.longitude,
+            geo          = location.geo,
+            location_type = location.location_type,
         ))
 
         await db.flush()
@@ -751,10 +749,6 @@ async def get_published_local_jobs(
             data=_paginate_jobs_by_job(items, getattr(last_row, "LocalJob", None), page_size, next_token if payload else None)
             )
     except Exception:
-        import traceback
-        import sys
-        traceback.print_exc(file=sys.stderr)
-        sys.stderr.flush()
         return send_error_response(request, 500, "Internal error")
 
 async def get_published_local_job(
@@ -787,10 +781,6 @@ async def get_published_local_job(
             data=_published_local_job_response(local_job)
         )
     except Exception:
-        import traceback
-        import sys
-        traceback.print_exc(file=sys.stderr)
-        sys.stderr.flush()
         return send_error_response(request, 500, "Internal server error")
 
 async def delete_local_job(request: Request, schema: LocalJobIdSchema, db: AsyncSession):
