@@ -427,7 +427,7 @@ class Job(SQLModel, table=True):
     
     @property
     def employment_type_display(self) -> str:
-        return EMPLOYMENT_TYPE_DISPLAY.get(self.employment_type, self.employment_type.replace("_", " ").title())    
+        return EMPLOYMENT_TYPE_DISPLAY.get(self.work_mode, self.work_mode.replace("_", " ").title())    
     
     @property
     def highlights_display(self) -> list:
