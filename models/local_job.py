@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 import string
 
 from sqlmodel import SQLModel, Field, Relationship
-from sqlalchemy import Column, BigInteger, ForeignKey, Numeric, Enum as SAEnum, event, Index
+from sqlalchemy import DATETIME, Column, BigInteger, ForeignKey, Numeric, Enum as SAEnum, event, Index, text
 from sqlalchemy.orm import Session
 from sqlalchemy.dialects.mysql import MEDIUMINT
 
@@ -46,8 +46,14 @@ class LocalJob(SQLModel, table=True):
 
     created_by:       int           = Field(sa_column=Column(BigInteger, ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False))
     created_at:       datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at:       datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
-
+    updated_at: datetime = Field(
+            sa_column=Column(
+                DATETIME,
+                nullable=False,
+                server_default=text("CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP")
+            )
+        )
+    
     images: List["LocalJobImage"] = Relationship(
         back_populates="local_job",
         sa_relationship_kwargs={
@@ -112,8 +118,14 @@ class LocalJobImage(SQLModel, table=True):
     size:         int           = Field()
     format:       Optional[str] = Field(default=None, max_length=20)
     created_at:   datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at:   datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
-
+    updated_at: datetime = Field(
+            sa_column=Column(
+                DATETIME,
+                nullable=False,
+                server_default=text("CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP")
+            )
+        )
+    
     local_job: Optional["LocalJob"] = Relationship(
         back_populates="images",        
         sa_relationship_kwargs={"lazy": "selectin"}
@@ -135,8 +147,13 @@ class LocalJobLocation(SQLModel, table=True):
                                        )
                                    )
     created_at:    datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at:    datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
-
+    updated_at: datetime = Field(
+            sa_column=Column(
+                DATETIME,
+                nullable=False,
+                server_default=text("CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP")
+            )
+        )
 
     local_job: Optional["LocalJob"] = Relationship(
         back_populates="location",       
@@ -153,8 +170,14 @@ class LocalJobSearchQuery(SQLModel, table=True):
     popularity:               int           = Field(default=1)
     last_searched:            datetime      = Field()
     created_at:               datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at:               datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
- 
+    updated_at: datetime = Field(
+            sa_column=Column(
+                DATETIME,
+                nullable=False,
+                server_default=text("CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP")
+            )
+        )
+     
 class LocalJobApplication(SQLModel, table=True):
     __tablename__ = "local_job_applications"
 
@@ -166,8 +189,14 @@ class LocalJobApplication(SQLModel, table=True):
     is_reviewed:    int           = Field(default=0)
     reviewed_at:    Optional[datetime] = Field(default=None)
     created_at:     datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at:     datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
-
+    updated_at: datetime = Field(
+            sa_column=Column(
+                DATETIME,
+                nullable=False,
+                server_default=text("CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP")
+            )
+        )
+    
     user: "User" = Relationship(back_populates="application", sa_relationship_kwargs={"lazy": "selectin"})
     local_job: "LocalJob" = Relationship(back_populates="applications", sa_relationship_kwargs={"lazy": "selectin"})
 

@@ -1,6 +1,6 @@
 # models/offline_messages.py
 from sqlmodel import SQLModel, Field, Relationship
-from sqlalchemy import Column, BigInteger, Text, ForeignKey, Enum as SAEnum
+from sqlalchemy import DATETIME, Column, BigInteger, Text, ForeignKey, Enum as SAEnum, text
 from typing import Optional
 from datetime import datetime, timezone
 
@@ -18,8 +18,14 @@ class E2EEPublicKey(SQLModel, table=True):
     encrypted_public_key: str      =  Field(sa_column=Column(Text)) 
     key_version:          int      = Field(sa_column=Column(BigInteger)) 
     created_at:           datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at:           datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    
+    updated_at: datetime = Field(
+            sa_column=Column(
+                DATETIME,
+                nullable=False,
+                server_default=text("CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP")
+            )
+        )
+        
 class ChatInfo(SQLModel, table=True):
     __tablename__ = "chat_info"
  
@@ -36,8 +42,14 @@ class ChatInfo(SQLModel, table=True):
     online:      Optional[int] = Field(default=0)
     last_active: Optional[datetime] = Field(default=None)
     created_at:  datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at:  datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
-
+    updated_at: datetime = Field(
+            sa_column=Column(
+                DATETIME,
+                nullable=False,
+                server_default=text("CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP")
+            )
+        )
+    
     user: Optional["User"] = Relationship(
         back_populates="chat_info",
         sa_relationship_kwargs={"lazy": "selectin"}
@@ -63,4 +75,10 @@ class OfflineMessage(SQLModel, table=True):
                                         )
                                     )
     created_at:     datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at:     datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(
+            sa_column=Column(
+                DATETIME,
+                nullable=False,
+                server_default=text("CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP")
+            )
+        )

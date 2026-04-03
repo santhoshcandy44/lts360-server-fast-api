@@ -7,8 +7,8 @@ from typing import List, Optional
 
 from models.local_job import LocalJobApplication
 from sqlmodel import SQLModel, Field, Column, Relationship
-from sqlalchemy import Column, Integer, BigInteger, Text, ForeignKey, UniqueConstraint, Numeric, Enum as SAEnum, UniqueConstraint, event
-from sqlalchemy.orm import Session
+from sqlalchemy import DATETIME, Column, Integer, BigInteger, Text, ForeignKey, UniqueConstraint, Numeric, Enum as SAEnum, DateTime, UniqueConstraint, event, func, text
+from sqlalchemy.orm import Session, Mapped, mapped_column
 
 class User(SQLModel, table=True):
     __tablename__ = "users"
@@ -50,7 +50,14 @@ class User(SQLModel, table=True):
                                            )
     media_id:              str            = Field(max_length=32, unique=True)
     created_at:            datetime       = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at:            datetime       = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+    updated_at: datetime = Field(
+        sa_column=Column(
+            DATETIME,
+            nullable=False,
+            server_default=text("CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP")
+        )
+    )
 
     location: Optional["UserLocation"] = Relationship(
         back_populates="user",
@@ -101,7 +108,13 @@ class UserLocation(SQLModel, table=True):
                                   )
                               )
     created_at:    datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at:    datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(
+            sa_column=Column(
+                DATETIME,
+                nullable=False,
+                server_default=text("CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP")
+            )
+        )
 
     user: User = Relationship(back_populates="location",  sa_relationship_kwargs={"lazy": "selectin"})
 
@@ -118,7 +131,13 @@ class UserBoard(SQLModel, table=True):
     display_order: Optional[int] = Field(default=-1)
     is_selected:   Optional[int] = Field(default=0)
     created_at:    datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at:    datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(
+            sa_column=Column(
+                DATETIME,
+                nullable=False,
+                server_default=text("CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP")
+            )
+        )
 
 class UserServiceIndustry(SQLModel, table=True):
     __tablename__ = "user_service_industries"
@@ -130,7 +149,13 @@ class UserServiceIndustry(SQLModel, table=True):
     user_id:     int           = Field(sa_column=Column(BigInteger, ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False))
     industry_id: int           = Field(sa_column=Column(Integer, ForeignKey("service_industries.industry_id", ondelete="CASCADE"), nullable=False, index=True))
     created_at:  datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at:  datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(
+            sa_column=Column(
+                DATETIME,
+                nullable=False,
+                server_default=text("CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP")
+            )
+        )
 
     industry: Optional["ServiceIndustry"] = Relationship(
         back_populates="user_service_industries",
@@ -144,7 +169,13 @@ class FCMToken(SQLModel, table=True):
     user_id:    int           = Field(sa_column=Column(BigInteger, ForeignKey("users.user_id", ondelete="CASCADE"), unique=True, nullable=False))
     fcm_token:  Optional[str] = Field(sa_column=Column(Text))  
     created_at: datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(
+            sa_column=Column(
+                DATETIME,
+                nullable=False,
+                server_default=text("CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP")
+            )
+        )
 
     user: Optional["User"] = Relationship(
         back_populates="fcm_token",

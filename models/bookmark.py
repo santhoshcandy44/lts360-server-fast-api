@@ -1,5 +1,5 @@
 from sqlmodel import SQLModel, Field, Relationship
-from sqlalchemy import Column, BigInteger, ForeignKey, UniqueConstraint
+from sqlalchemy import DATETIME, Column, BigInteger, ForeignKey, UniqueConstraint, text
 from typing import Optional
 from datetime import datetime, timezone
  
@@ -13,8 +13,14 @@ class UserBookmarkService(SQLModel, table=True):
     user_id:    int           = Field(sa_column=Column(BigInteger, ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False))
     service_id: int           = Field(sa_column=Column(BigInteger, ForeignKey("services.service_id", ondelete="CASCADE"), nullable=False, index=True))
     created_at: datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
-
+    updated_at: datetime = Field(
+            sa_column=Column(
+                DATETIME,
+                nullable=False,
+                server_default=text("CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP")
+            )
+        )
+    
     service: Optional["Service"] = Relationship(
         back_populates="bookmarks",
         sa_relationship_kwargs={"lazy": "selectin"}
@@ -30,8 +36,14 @@ class UserBookmarkLocalJob(SQLModel, table=True):
     user_id:      int           = Field(sa_column=Column(BigInteger, ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False))
     local_job_id: int           = Field(sa_column=Column(BigInteger, ForeignKey("local_jobs.local_job_id", ondelete="CASCADE"), nullable=False, index=True))
     created_at:   datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at:   datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
-
+    updated_at: datetime = Field(
+            sa_column=Column(
+                DATETIME,
+                nullable=False,
+                server_default=text("CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP")
+            )
+        )
+    
     local_job: Optional["LocalJob"] = Relationship(
         back_populates="bookmarks",
         sa_relationship_kwargs={"lazy": "selectin"}
@@ -48,8 +60,14 @@ class UserBookmarkUsedProductListing(SQLModel, table=True):
     user_id:                 int           = Field(sa_column=Column(BigInteger, ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False))
     used_product_listing_id: int           = Field(sa_column=Column(BigInteger, ForeignKey("used_product_listings.used_product_listing_id", ondelete="CASCADE"), nullable=False, index=True))
     created_at:              datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at:              datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
-
+    updated_at: datetime = Field(
+            sa_column=Column(
+                DATETIME,
+                nullable=False,
+                server_default=text("CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP")
+            )
+        )
+    
     used_product_listing: Optional["UsedProductListing"] = Relationship(
         back_populates="bookmarks",
         sa_relationship_kwargs={"lazy": "selectin"}

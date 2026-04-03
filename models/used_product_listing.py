@@ -6,7 +6,7 @@ from decimal import Decimal
 from typing import List, Optional
 
 from sqlmodel import SQLModel, Field, Relationship
-from sqlalchemy import Column, BigInteger, ForeignKey, Numeric, Enum as SAEnum, Index, event
+from sqlalchemy import DATETIME, Column, BigInteger, ForeignKey, Numeric, Enum as SAEnum, Index, event, text
 from sqlalchemy.orm import Session
 from sqlalchemy.dialects.mysql import MEDIUMINT
 
@@ -41,7 +41,13 @@ class UsedProductListing(SQLModel, table=True):
 
     created_by:               int           = Field(sa_column=Column(BigInteger, ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False, index=True))
     created_at:               datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at:               datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(
+            sa_column=Column(
+                DATETIME,
+                nullable=False,
+                server_default=text("CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP")
+            )
+        )
 
     images: List["UsedProductListingImage"] = Relationship(
         back_populates="used_prodct_listing",
@@ -94,8 +100,14 @@ class UsedProductListingImage(SQLModel, table=True):
     size:                    int           = Field()
     format:                  str           = Field(max_length=20)
     created_at:              datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at:              datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
-
+    updated_at: datetime = Field(
+            sa_column=Column(
+                DATETIME,
+                nullable=False,
+                server_default=text("CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP")
+            )
+        )
+    
     used_prodct_listing: Optional["UsedProductListing"] = Relationship(
         back_populates="images",        
         sa_relationship_kwargs={"lazy": "selectin"}
@@ -117,7 +129,13 @@ class UsedProductListingLocation(SQLModel, table=True):
                                                 )
                                             )
     created_at:              datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at:              datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(
+            sa_column=Column(
+                DATETIME,
+                nullable=False,
+                server_default=text("CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP")
+            )
+        )
 
     used_prodct_listing: Optional["UsedProductListing"] = Relationship(
         back_populates="location",       
@@ -133,7 +151,13 @@ class UsedProductListingSearchQuery(SQLModel, table=True):
     popularity:               int           = Field(default=1)
     last_searched:            datetime      = Field()
     created_at:               datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at:               datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(
+            sa_column=Column(
+                DATETIME,
+                nullable=False,
+                server_default=text("CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP")
+            )
+        )
 
 def _generate_short_code() -> str:
     chars = string.ascii_letters + string.digits 

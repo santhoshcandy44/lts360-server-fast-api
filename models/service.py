@@ -5,7 +5,7 @@ import string
 import random
 
 from sqlmodel import SQLModel, Field , Relationship
-from sqlalchemy import Column, Integer, BigInteger, Numeric, ForeignKey, Enum as SAEnum, event, Index
+from sqlalchemy import DATETIME, Column, Integer, BigInteger, Numeric, ForeignKey, Enum as SAEnum, event, Index, text
 from sqlalchemy.orm import Session
 from sqlalchemy.dialects.mysql import MEDIUMINT
 
@@ -50,8 +50,14 @@ class Service(SQLModel, table=True):
 
     created_by:        int           = Field(sa_column=Column(BigInteger, ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False, index=True))
     created_at:        datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at:        datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
-
+    updated_at: datetime = Field(
+            sa_column=Column(
+                DATETIME,
+                nullable=False,
+                server_default=text("CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP")
+            )
+        )
+    
     thumbnail: Optional["ServiceThumbnail"] = Relationship(
             back_populates="service",
             sa_relationship_kwargs={
@@ -125,8 +131,14 @@ class ServiceImage(SQLModel, table=True):
     size:       int           = Field()
     format:     str           = Field(max_length=20)
     created_at: datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
-
+    updated_at: datetime = Field(
+            sa_column=Column(
+                DATETIME,
+                nullable=False,
+                server_default=text("CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP")
+            )
+        )
+    
     service: Optional["Service"] = Relationship(
         back_populates="images",        
         sa_relationship_kwargs={"lazy": "selectin"}
@@ -145,8 +157,14 @@ class ServicePlan(SQLModel, table=True):
     duration_unit: Optional[str] = Field(default=None, max_length=20)
     delivery_time: int           = Field()
     created_at:    datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at:    datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
-
+    updated_at: datetime = Field(
+            sa_column=Column(
+                DATETIME,
+                nullable=False,
+                server_default=text("CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP")
+            )
+        )
+    
     service: Optional["Service"] = Relationship(
         back_populates="plans",        
         sa_relationship_kwargs={"lazy": "selectin"}
@@ -167,8 +185,14 @@ class ServiceLocation(SQLModel, table=True):
                                        )
                                    )
     created_at:    datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at:    datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
-
+    updated_at: datetime = Field(
+            sa_column=Column(
+                DATETIME,
+                nullable=False,
+                server_default=text("CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP")
+            )
+        )
+    
     service: Optional["Service"] = Relationship(
         back_populates="location",        
         sa_relationship_kwargs={"lazy": "selectin"}
@@ -186,8 +210,14 @@ class ServiceThumbnail(SQLModel, table=True):
     size:         int           = Field()
     format:       Optional[str] = Field(default=None, max_length=20)
     created_at:   datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at:   datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
-
+    updated_at: datetime = Field(
+            sa_column=Column(
+                DATETIME,
+                nullable=False,
+                server_default=text("CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP")
+            )
+        )
+    
     service: Optional["Service"] = Relationship(
         back_populates="thumbnail",        
         sa_relationship_kwargs={"lazy": "selectin"}
@@ -202,8 +232,14 @@ class ServiceReview(SQLModel, table=True):
     rating:     int           = Field()
     comment:    str           = Field()
     created_at: datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
-
+    updated_at: datetime = Field(
+            sa_column=Column(
+                DATETIME,
+                nullable=False,
+                server_default=text("CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP")
+            )
+        )
+    
 class ServiceReviewReply(SQLModel, table=True):
     __tablename__ = "service_reviews_replies"
  
@@ -212,8 +248,14 @@ class ServiceReviewReply(SQLModel, table=True):
     service_review_id: int           = Field(sa_column=Column(Integer, ForeignKey("service_reviews.id", ondelete="CASCADE"), nullable=False, index=True))
     reply:             str           = Field()
     created_at:        datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at:        datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
-
+    updated_at: datetime = Field(
+            sa_column=Column(
+                DATETIME,
+                nullable=False,
+                server_default=text("CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP")
+            )
+        )
+    
 class ServiceSearchQuery(SQLModel, table=True):
     __tablename__ = "servcie_search_queries"
 
@@ -223,8 +265,14 @@ class ServiceSearchQuery(SQLModel, table=True):
     popularity:               int           = Field(default=1)
     last_searched:            datetime      = Field()
     created_at:               datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at:               datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
-
+    updated_at: datetime = Field(
+            sa_column=Column(
+                DATETIME,
+                nullable=False,
+                server_default=text("CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP")
+            )
+        )
+    
 class ServiceIndustry(SQLModel, table=True):
     __tablename__ = "service_industries"
 
@@ -232,8 +280,14 @@ class ServiceIndustry(SQLModel, table=True):
     name: str           = Field(max_length=255)
     description:   Optional[str] = Field(default=None)
     created_at:    datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at:    datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
-    
+    updated_at: datetime = Field(
+            sa_column=Column(
+                DATETIME,
+                nullable=False,
+                server_default=text("CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP")
+            )
+        )
+        
     user_service_industries: List["UserServiceIndustry"] = Relationship(
         back_populates="industry",
         sa_relationship_kwargs={"lazy": "selectin"}

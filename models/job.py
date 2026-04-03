@@ -13,9 +13,9 @@ from typing import List, Optional
 from sqlmodel import Field, Relationship, SQLModel
 
 from sqlalchemy import (
-    BigInteger, Column, Date, DateTime,
+    DATETIME, BigInteger, Column, Date, DateTime,
     Enum as SAEnum, ForeignKey, Integer,
-    JSON, Numeric, String, Text, UniqueConstraint, event , Index
+    JSON, Numeric, String, Text, UniqueConstraint, event , Index, text
 )
 
 from sqlalchemy.dialects.mysql import MEDIUMINT
@@ -30,8 +30,14 @@ class Plan(SQLModel, table=True):
     price:    Decimal       = Field(sa_column=Column(Numeric(10, 2), nullable=False, default=0))
     features: dict          = Field(sa_column=Column(JSON, nullable=False))
     created_at:        datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at:        datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
-
+    updated_at: datetime = Field(
+            sa_column=Column(
+                DATETIME,
+                nullable=False,
+                server_default=text("CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP")
+            )
+        )
+    
     recruiters: List["RecruiterProfile"] = Relationship(
         back_populates="plan",
         sa_relationship_kwargs={"lazy": "selectin"},
@@ -66,7 +72,14 @@ class RecruiterProfile(SQLModel, table=True):
     bio:                str           = Field(sa_column=Column(Text, nullable=False))
     years_of_experience: int          = Field(default=1)
     created_at:         datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at:         datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(
+            sa_column=Column(
+                DATETIME,
+                nullable=False,
+                server_default=text("CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP")
+            )
+        )
+    
     is_verified:        bool          = Field(default=False)
 
     plan_id:            int           = Field(sa_column=Column(Integer, ForeignKey("lts360_jobs_console_plans.id", ondelete="RESTRICT"), nullable=False, default=1))
@@ -77,8 +90,14 @@ class RecruiterProfile(SQLModel, table=True):
     last_sign_in:       datetime       = Field(nullable=False)
     
     created_at:        datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at:        datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
-
+    updated_at: datetime = Field(
+            sa_column=Column(
+                DATETIME,
+                nullable=False,
+                server_default=text("CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP")
+            )
+        )
+    
     plan: Optional[Plan] = Relationship(
         back_populates="recruiters",
         sa_relationship_kwargs={"lazy": "selectin"},
@@ -113,8 +132,14 @@ class RecruiterSettings(SQLModel, table=True):
                                        )
                                    )
     created_at:        datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at:        datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
-
+    updated_at: datetime = Field(
+            sa_column=Column(
+                DATETIME,
+                nullable=False,
+                server_default=text("CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP")
+            )
+        )
+    
     user: Optional[RecruiterProfile] = Relationship(
         back_populates="settings",
         sa_relationship_kwargs={"lazy": "selectin"},
@@ -144,8 +169,14 @@ class Organization(SQLModel, table=True):
     postal_code:          str           = Field(max_length=10)
 
     created_at:        datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at:        datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
-    
+    updated_at: datetime = Field(
+            sa_column=Column(
+                DATETIME,
+                nullable=False,
+                server_default=text("CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP")
+            )
+        )
+        
     country: Optional["Country"] = Relationship(
         back_populates="organizations",
         sa_relationship_kwargs={"lazy": "selectin"},
@@ -180,8 +211,14 @@ class Education(SQLModel, table=True):
     description: str           = Field(default="", sa_column=Column(Text, nullable=False, default=""))
 
     created_at:        datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at:        datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
-
+    updated_at: datetime = Field(
+            sa_column=Column(
+                DATETIME,
+                nullable=False,
+                server_default=text("CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP")
+            )
+        )
+    
     jobs: List["Job"] = Relationship(
         back_populates="education",
         sa_relationship_kwargs={"lazy": "selectin"},
@@ -196,8 +233,14 @@ class JobIndustry(SQLModel, table=True):
     description: str           = Field(default="", sa_column=Column(Text, nullable=False, default=""))
 
     created_at:        datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at:        datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
-
+    updated_at: datetime = Field(
+            sa_column=Column(
+                DATETIME,
+                nullable=False,
+                server_default=text("CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP")
+            )
+        )
+    
     jobs: List["Job"] = Relationship(
         back_populates="industry",
         sa_relationship_kwargs={"lazy": "selectin"},
@@ -217,8 +260,14 @@ class Department(SQLModel, table=True):
     description: str           = Field(default="", sa_column=Column(Text, nullable=False, default=""))
 
     created_at:        datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at:        datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
-
+    updated_at: datetime = Field(
+            sa_column=Column(
+                DATETIME,
+                nullable=False,
+                server_default=text("CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP")
+            )
+        )
+    
     jobs: List["Job"] = Relationship(
         back_populates="department",
         sa_relationship_kwargs={"lazy": "selectin"},
@@ -234,8 +283,14 @@ class Role(SQLModel, table=True):
     popularity:  int           = Field(default=0)
 
     created_at:        datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at:        datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
-
+    updated_at: datetime = Field(
+            sa_column=Column(
+                DATETIME,
+                nullable=False,
+                server_default=text("CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP")
+            )
+        )
+    
     jobs: List["Job"] = Relationship(
         back_populates="role",
         sa_relationship_kwargs={"lazy": "selectin"},
@@ -251,8 +306,14 @@ class Skill(SQLModel, table=True):
     popularity:  int           = Field(default=0)
 
     created_at:        datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at:        datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
-
+    updated_at: datetime = Field(
+            sa_column=Column(
+                DATETIME,
+                nullable=False,
+                server_default=text("CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP")
+            )
+        )
+    
     must_have_jobs:    List["JobMustHaveSkill"]    = Relationship(back_populates="skill", sa_relationship_kwargs={"lazy": "selectin"})
     good_to_have_jobs: List["JobGoodToHaveSkill"]  = Relationship(back_populates="skill", sa_relationship_kwargs={"lazy": "selectin"})
 
@@ -356,8 +417,14 @@ class Job(SQLModel, table=True):
     slug:                  str           = Field(max_length=300, sa_column=Column(String(300), unique=True, nullable=False))
 
     created_at:        datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at:        datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
-
+    updated_at: datetime = Field(
+            sa_column=Column(
+                DATETIME,
+                nullable=False,
+                server_default=text("CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP")
+            )
+        )
+    
     # Relationships
     city:    Optional["City"] = Relationship(back_populates="jobs",         sa_relationship_kwargs={"lazy": "selectin"})
 
@@ -480,8 +547,14 @@ class JobMustHaveSkill(SQLModel, table=True):
     skill: Optional[Skill] = Relationship(back_populates="must_have_jobs",     sa_relationship_kwargs={"lazy": "selectin"})
 
     created_at:        datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at:        datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
-
+    updated_at: datetime = Field(
+            sa_column=Column(
+                DATETIME,
+                nullable=False,
+                server_default=text("CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP")
+            )
+        )
+    
 class JobGoodToHaveSkill(SQLModel, table=True):
     __tablename__ = "job_good_have_skills"
     __table_args__ = (UniqueConstraint("job_id", "code"),)
@@ -494,8 +567,14 @@ class JobGoodToHaveSkill(SQLModel, table=True):
     skill: Optional[Skill] = Relationship(back_populates="good_to_have_jobs",   sa_relationship_kwargs={"lazy": "selectin"})
 
     created_at:        datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at:        datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
-
+    updated_at: datetime = Field(
+            sa_column=Column(
+                DATETIME,
+                nullable=False,
+                server_default=text("CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP")
+            )
+        )
+    
 #Applicant Profile
 class ApplicantProfile(SQLModel, table=True):
     __tablename__ = "applicant_profiles"
@@ -515,7 +594,14 @@ class ApplicantProfile(SQLModel, table=True):
                                           )
     phone:                Optional[str] = Field(default=None, max_length=20, nullable=True)
     created_at:           datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at:           datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(
+            sa_column=Column(
+                DATETIME,
+                nullable=False,
+                server_default=text("CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP")
+            )
+        )
+    
     is_verified:          bool          = Field(default=False)
 
     educations:   List["ApplicantProfileEducation"]   = Relationship(back_populates="applicant_profile", sa_relationship_kwargs={"lazy": "selectin"})
@@ -527,8 +613,14 @@ class ApplicantProfile(SQLModel, table=True):
     applications: List["Application"]                 = Relationship(back_populates="applicant_profile", sa_relationship_kwargs={"lazy": "selectin"})
 
     created_at:        datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at:        datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
-
+    updated_at: datetime = Field(
+            sa_column=Column(
+                DATETIME,
+                nullable=False,
+                server_default=text("CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP")
+            )
+        )
+    
     @property
     def is_completed(self) -> bool:
         return all([
@@ -557,8 +649,14 @@ class ApplicantProfileEducation(SQLModel, table=True):
     is_currently_studying:      bool              = Field(default=False)
 
     created_at:        datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at:        datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
-
+    updated_at: datetime = Field(
+            sa_column=Column(
+                DATETIME,
+                nullable=False,
+                server_default=text("CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP")
+            )
+        )
+    
     applicant_profile: Optional[ApplicantProfile] = Relationship(back_populates="educations", sa_relationship_kwargs={"lazy": "selectin"})
 
 class ApplicantProfileExperience(SQLModel, table=True):
@@ -582,8 +680,14 @@ class ApplicantProfileExperience(SQLModel, table=True):
     location:             Optional[str] = Field(default=None, max_length=255, nullable=True)
 
     created_at:        datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at:        datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
-
+    updated_at: datetime = Field(
+            sa_column=Column(
+                DATETIME,
+                nullable=False,
+                server_default=text("CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP")
+            )
+        )
+    
     applicant_profile: Optional[ApplicantProfile] = Relationship(back_populates="experiences", sa_relationship_kwargs={"lazy": "selectin"})
 
 class ApplicantProfileSkill(SQLModel, table=True):
@@ -595,8 +699,14 @@ class ApplicantProfileSkill(SQLModel, table=True):
     code:           str           = Field(max_length=50)
 
     created_at:        datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at:        datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
-
+    updated_at: datetime = Field(
+            sa_column=Column(
+                DATETIME,
+                nullable=False,
+                server_default=text("CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP")
+            )
+        )
+    
     applicant_profile: Optional[ApplicantProfile] = Relationship(back_populates="skills", sa_relationship_kwargs={"lazy": "selectin"})
 
 class ApplicantProfileLanguage(SQLModel, table=True):
@@ -610,8 +720,14 @@ class ApplicantProfileLanguage(SQLModel, table=True):
     proficiency_value:     Optional[str] = Field(default=None, max_length=50, nullable=True)
 
     created_at:        datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at:        datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
-
+    updated_at: datetime = Field(
+            sa_column=Column(
+                DATETIME,
+                nullable=False,
+                server_default=text("CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP")
+            )
+        )
+    
     applicant_profile: Optional[ApplicantProfile] = Relationship(back_populates="languages", sa_relationship_kwargs={"lazy": "selectin"})
 
 class ApplicantProfileResume(SQLModel, table=True):
@@ -626,8 +742,14 @@ class ApplicantProfileResume(SQLModel, table=True):
     last_used:            Optional[datetime] = Field(default=None, sa_column=Column(DateTime, nullable=True))
 
     created_at:        datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at:        datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
-
+    updated_at: datetime = Field(
+            sa_column=Column(
+                DATETIME,
+                nullable=False,
+                server_default=text("CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP")
+            )
+        )
+    
     applicant_profile: Optional[ApplicantProfile] = Relationship(back_populates="resume", sa_relationship_kwargs={"lazy": "selectin"})
 
 class ApplicantProfileCertificate(SQLModel, table=True):
@@ -642,8 +764,14 @@ class ApplicantProfileCertificate(SQLModel, table=True):
     type:        str           = Field(max_length=50)
 
     created_at:        datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at:        datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
-
+    updated_at: datetime = Field(
+            sa_column=Column(
+                DATETIME,
+                nullable=False,
+                server_default=text("CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP")
+            )
+        )
+    
     applicant_profile: Optional[ApplicantProfile] = Relationship(back_populates="certificates", sa_relationship_kwargs={"lazy": "selectin"})
 
 class Application(SQLModel, table=True):
@@ -664,11 +792,16 @@ class Application(SQLModel, table=True):
     is_rejected:          bool          = Field(default=False)
     is_top_application:   bool          = Field(default=False)
     reviewed_at:          Optional[datetime] = Field(default=None, sa_column=Column(DateTime, nullable=True))
-    updated_at:           datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     created_at:        datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at:        datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
-
+    updated_at: datetime = Field(
+            sa_column=Column(
+                DATETIME,
+                nullable=False,
+                server_default=text("CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP")
+            )
+        )
+    
     applicant_profile: Optional[ApplicantProfile] = Relationship(back_populates="applications", sa_relationship_kwargs={"lazy": "selectin"})
     job:               Optional[Job]              = Relationship(back_populates="applications", sa_relationship_kwargs={"lazy": "selectin"})
 
@@ -680,8 +813,14 @@ class UserJobIndustry(SQLModel, table=True):
     industry_code:    str           = Field(sa_column=Column(String(50), ForeignKey("job_industries.code", ondelete="CASCADE"), nullable=False, name="code"))
 
     created_at:        datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at:        datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
-
+    updated_at: datetime = Field(
+            sa_column=Column(
+                DATETIME,
+                nullable=False,
+                server_default=text("CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP")
+            )
+        )
+    
     industry: Optional[JobIndustry] = Relationship(back_populates="user_industries", sa_relationship_kwargs={"lazy": "selectin"})
 
 class UserBookmarkJob(SQLModel, table=True):
@@ -693,8 +832,14 @@ class UserBookmarkJob(SQLModel, table=True):
     job_id:           int           = Field(sa_column=Column(BigInteger, ForeignKey("jobs.job_id", ondelete="CASCADE"), nullable=False, name="job_id"))
 
     created_at:        datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at:        datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
-
+    updated_at: datetime = Field(
+            sa_column=Column(
+                DATETIME,
+                nullable=False,
+                server_default=text("CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP")
+            )
+        )
+    
     job: Optional[Job] = Relationship(back_populates="bookmarks", sa_relationship_kwargs={"lazy": "selectin"})
 
 #Utils
@@ -713,8 +858,14 @@ class SalaryMarket(SQLModel, table=True):
     salary_end:    int           = Field(default=1000000)
 
     created_at:        datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at:        datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
-
+    updated_at: datetime = Field(
+            sa_column=Column(
+                DATETIME,
+                nullable=False,
+                server_default=text("CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP")
+            )
+        )
+    
 @event.listens_for(ApplicantProfile, "before_insert")
 def before_insert_local_job(mapper, connection, target):
     session = Session(bind=connection)

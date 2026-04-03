@@ -2,7 +2,7 @@ from decimal import Decimal
 from typing import List, Optional
 from datetime import datetime, timezone
 
-from sqlalchemy import (Column , Numeric, String)
+from sqlalchemy import (DATETIME, Column , Numeric, String, text)
 from sqlmodel import SQLModel, Field, Relationship
 from sqlalchemy.dialects.mysql import MEDIUMINT
 
@@ -13,8 +13,14 @@ class Board(SQLModel, table=True):
     board_name:  str           = Field(max_length=255)
     board_label: Optional[str] = Field(default=None, max_length=255)
     created_at:  datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at:  datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
-
+    updated_at: datetime = Field(
+            sa_column=Column(
+                DATETIME,
+                nullable=False,
+                server_default=text("CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP")
+            )
+        )
+    
 class Country(SQLModel, table=True):
     __tablename__ = "countries"
     __table_args__ = {"extend_existing": True}
