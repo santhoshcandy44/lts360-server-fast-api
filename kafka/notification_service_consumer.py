@@ -4,10 +4,10 @@ from aiokafka import AIOKafkaConsumer
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
-from database import AsyncSessionLocal
+from db.database import AsyncSessionLocal
 from models.user import User, FCMToken
 from utils.fcm import send_fcm_notification, decode_fcm_token
-from config import PROFILE_BASE_URL
+from config.config import PROFILE_BASE_URL
 
 async def start_local_job_notifications_consumer():
     consumer = AIOKafkaConsumer(

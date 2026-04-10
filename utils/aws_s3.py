@@ -1,7 +1,7 @@
 # utils/aws_s3.py
 import aioboto3
 from fastapi.responses import StreamingResponse, Response
-from config import (
+from config.config import (
     S3_BUCKET_NAME,
     S3_BUCKET_REGION,
     S3_BUCKET_ACCESS_KEY,
@@ -36,16 +36,12 @@ def build_s3_url(key: str) -> str:
     """
     return f"{S3_ENDPOINT_URL}/{S3_BUCKET_NAME}/{key}"
 
-# def build_s3_url(key: str) -> str:
-#     return f"https://{S3_BUCKET_NAME}.s3.{S3_BUCKET_REGION}.amazonaws.com/{key}"
-
-
 # ── Enable Versioning ─────────────────────────────────────────────────────────
-async def enable_versioning(bucket_name: str):
+async def enable_aws_s3_versioning():
     try:
         async with _get_session().client("s3", endpoint_url='http://localhost:5000') as s3:
             await s3.put_bucket_versioning(
-                Bucket=bucket_name,
+                Bucket=S3_BUCKET_NAME,
                 VersioningConfiguration={"Status": "Enabled"},
             )
         print("✅ S3 bucket versioning enabled.")

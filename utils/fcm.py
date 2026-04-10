@@ -10,7 +10,7 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.backends import default_backend
-from config import FCM_TOKEN_SECRET
+from config.config import FCM_TOKEN_SECRET
 
 _SERVICE_ACCOUNT_PATH = os.path.join(os.path.dirname(__file__), "../config/service_account.json")
 

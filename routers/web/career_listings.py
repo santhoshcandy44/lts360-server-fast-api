@@ -1,11 +1,9 @@
-from fastapi import APIRouter, Depends, File, Query, Request, UploadFile
-from typing import Optional
-from schemas.app_schemas import SearchChatsSchema
+from fastapi import APIRouter, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from database import get_db
+from db.database import get_db
 from routers.middleware.web.auth_middleware import authenticate_token
-from controllers.web import career_listings_controller
+from services.web import career_listings_service
 from schemas.web.career_listing_schemas import (
     ApplicationsByJobSchema,
     DashboardSchema,
@@ -37,11 +35,11 @@ router = APIRouter(prefix="/career-listings", tags=["Career Listings"])
 
 @router.post("/auth/signin/google/lts360")
 async def google_login(request: Request, schema: GoogleLoginSchema, db: AsyncSession = Depends(get_db)):
-    return await career_listings_controller.google_signin(request, schema, db)
+    return await career_listings_service.google_signin(request, schema, db)
 
 @router.post("/auth/signin/lts360")
 async def email_login(request: Request, schema: EmailLoginSchema, db: AsyncSession = Depends(get_db)):
-    return await career_listings_controller.email_signin(request, schema, db)
+    return await career_listings_service.email_signin(request, schema, db)
 
 @router.get("/dashboard")
 async def dashboard(
@@ -50,7 +48,7 @@ async def dashboard(
     db: AsyncSession = Depends(get_db),
     _: None = Depends(authenticate_token),
 ):
-    return await career_listings_controller.dashboard(request, schema, db)
+    return await career_listings_service.dashboard(request, schema, db)
 
 @router.get("/countries/search")
 async def search_countries(
@@ -59,7 +57,7 @@ async def search_countries(
     db: AsyncSession = Depends(get_db),
     _: None = Depends(authenticate_token),
 ):
-    return await career_listings_controller.search_countries(request, schema, db)
+    return await career_listings_service.search_countries(request, schema, db)
 
 @router.get("/states/search")
 async def search_states(
@@ -68,7 +66,7 @@ async def search_states(
     db: AsyncSession = Depends(get_db),
     _: None = Depends(authenticate_token),
 ):
-    return await career_listings_controller.search_states(request, schema, db)
+    return await career_listings_service.search_states(request, schema, db)
 
 @router.get("/locations/search")
 async def search_cities(
@@ -77,7 +75,7 @@ async def search_cities(
     db: AsyncSession = Depends(get_db),
     _: None = Depends(authenticate_token),
 ):
-    return await career_listings_controller.search_cities(request, schema, db)
+    return await career_listings_service.search_cities(request, schema, db)
 
 @router.get("/employment-types/search")
 async def search_employment_types(
@@ -86,7 +84,7 @@ async def search_employment_types(
     db: AsyncSession = Depends(get_db),
     _: None = Depends(authenticate_token),
 ):
-    return await career_listings_controller.search_employment_types(request, schema, db)
+    return await career_listings_service.search_employment_types(request, schema, db)
 
 @router.get("/educations/search")
 async def search_education(
@@ -95,7 +93,7 @@ async def search_education(
     db: AsyncSession = Depends(get_db),
     _: None = Depends(authenticate_token),
 ):
-    return await career_listings_controller.search_education(request, schema, db)
+    return await career_listings_service.search_education(request, schema, db)
 
 @router.get("/industries/search")
 async def search_industry(
@@ -104,7 +102,7 @@ async def search_industry(
     db: AsyncSession = Depends(get_db),
     _: None = Depends(authenticate_token),
 ):
-    return await career_listings_controller.search_industry(request, schema, db)
+    return await career_listings_service.search_industry(request, schema, db)
 
 @router.get("/departments/search")
 async def search_department(
@@ -113,7 +111,7 @@ async def search_department(
     db: AsyncSession = Depends(get_db),
     _: None = Depends(authenticate_token),
 ):
-    return await career_listings_controller.search_department(request, schema, db)
+    return await career_listings_service.search_department(request, schema, db)
 
 @router.get("/roles/search")
 async def search_role(
@@ -122,7 +120,7 @@ async def search_role(
     db: AsyncSession = Depends(get_db),
     _: None = Depends(authenticate_token),
 ):
-    return await career_listings_controller.search_role(request, schema, db)
+    return await career_listings_service.search_role(request, schema, db)
 
 @router.get("/skills/search")
 async def search_skills(
@@ -131,7 +129,7 @@ async def search_skills(
     db: AsyncSession = Depends(get_db),
     _: None = Depends(authenticate_token),
 ):
-    return await career_listings_controller.search_skills(request, schema, db)
+    return await career_listings_service.search_skills(request, schema, db)
 
 @router.get("/job-listings/meta")
 async def get_job_listings_meta(
@@ -139,7 +137,7 @@ async def get_job_listings_meta(
     db: AsyncSession = Depends(get_db),
     _: None = Depends(authenticate_token),
 ):
-    return await career_listings_controller.get_job_listings_meta(request, db)
+    return await career_listings_service.get_job_listings_meta(request, db)
 
 @router.get("/job-listings")
 async def get_job_listings(
@@ -148,7 +146,7 @@ async def get_job_listings(
     db: AsyncSession = Depends(get_db),
     _: None = Depends(authenticate_token),
 ):
-    return await career_listings_controller.get_job_listings(request, schema, db)
+    return await career_listings_service.get_job_listings(request, schema, db)
 
 @router.post("/job-listings")
 async def create_job_listing(
@@ -157,7 +155,7 @@ async def create_job_listing(
     db: AsyncSession = Depends(get_db),
     _: None = Depends(authenticate_token),
 ):
-    return await career_listings_controller.create_job_listing(request, schema, db)
+    return await career_listings_service.create_job_listing(request, schema, db)
 
 @router.get("/job-listings/{job_id}")
 async def get_job_listing(
@@ -166,7 +164,7 @@ async def get_job_listing(
     db: AsyncSession = Depends(get_db),
     _: None = Depends(authenticate_token),
 ):
-    return await career_listings_controller.get_job_listing(request, schema, db)
+    return await career_listings_service.get_job_listing(request, schema, db)
 
 @router.put("/job-listings/{job_id}")
 async def update_job_listing(
@@ -176,7 +174,7 @@ async def update_job_listing(
     db: AsyncSession = Depends(get_db),
     _: None = Depends(authenticate_token),
 ):
-    return await career_listings_controller.update_job_listing(request, jobIdParamSchema.job_id, schema, db)
+    return await career_listings_service.update_job_listing(request, jobIdParamSchema.job_id, schema, db)
 
 @router.delete("/job-listings/{job_id}")
 async def delete_job_listing(
@@ -185,7 +183,7 @@ async def delete_job_listing(
     db: AsyncSession = Depends(get_db),
     _: None = Depends(authenticate_token),
 ):
-    return await career_listings_controller.delete_job_listing(request, schema, db)
+    return await career_listings_service.delete_job_listing(request, schema, db)
 
 @router.post("/job-listings/{job_id}/status")
 async def update_job_status(
@@ -194,7 +192,7 @@ async def update_job_status(
     db: AsyncSession = Depends(get_db),
     _: None = Depends(authenticate_token),
 ):
-    return await career_listings_controller.update_job_status(request, schema, db)
+    return await career_listings_service.update_job_status(request, schema, db)
 
 @router.post("/job-listings/{job_id}/extend-expiry")
 async def extend_expiry(
@@ -203,7 +201,7 @@ async def extend_expiry(
     db: AsyncSession = Depends(get_db),
     _: None = Depends(authenticate_token),
 ):
-    return await career_listings_controller.extend_expiry(request, schema, db)
+    return await career_listings_service.extend_expiry(request, schema, db)
 
 @router.get("/applications")
 async def get_applications(
@@ -212,7 +210,7 @@ async def get_applications(
     db: AsyncSession = Depends(get_db),
     _: None = Depends(authenticate_token),
 ):
-    return await career_listings_controller.get_applications(request, schema, db)
+    return await career_listings_service.get_applications(request, schema, db)
 
 @router.get("/applications/{job_id}")
 async def get_applications_by_job(
@@ -222,7 +220,7 @@ async def get_applications_by_job(
     db: AsyncSession = Depends(get_db),
     _: None = Depends(authenticate_token),
 ):
-    return await career_listings_controller.get_applications_by_job(request, schema, db)
+    return await career_listings_service.get_applications_by_job(request, schema, db)
 
 @router.get("/applications/{job_id}/{application_id}/manage")
 async def manage_application(
@@ -231,7 +229,7 @@ async def manage_application(
     db: AsyncSession = Depends(get_db),
     _: None = Depends(authenticate_token),
 ):
-    return await career_listings_controller.manage_application(request, schema, db)
+    return await career_listings_service.manage_application(request, schema, db)
 
 @router.post("/applications/{job_id}/{application_id}/update-status")
 async def update_application_status(
@@ -240,7 +238,7 @@ async def update_application_status(
     db: AsyncSession = Depends(get_db),
     _: None = Depends(authenticate_token),
 ):
-    return await career_listings_controller.update_application_status(request, schema, db)
+    return await career_listings_service.update_application_status(request, schema, db)
 
 @router.post("/applications/{job_id}/{application_id}/reject")
 async def reject_application(
@@ -249,7 +247,7 @@ async def reject_application(
     db: AsyncSession = Depends(get_db),
     _: None = Depends(authenticate_token),
 ):
-    return await career_listings_controller.reject_application(request, schema, db)
+    return await career_listings_service.reject_application(request, schema, db)
 
 @router.post("/applications/{job_id}/{application_id}/toggle-top")
 async def toggle_top_application(
@@ -258,7 +256,7 @@ async def toggle_top_application(
     db: AsyncSession = Depends(get_db),
     _: None = Depends(authenticate_token),
 ):
-    return await career_listings_controller.toggle_top_application(request, schema, db)
+    return await career_listings_service.toggle_top_application(request, schema, db)
 
 @router.get("/organization-profile/meta")
 async def organization_meta(
@@ -266,7 +264,7 @@ async def organization_meta(
     db: AsyncSession = Depends(get_db),
     _: None = Depends(authenticate_token),
 ):
-    return await career_listings_controller.organization_meta(request, db)
+    return await career_listings_service.organization_meta(request, db)
 
 @router.get("/organization-profile")
 async def get_organization_profile(
@@ -274,7 +272,7 @@ async def get_organization_profile(
     db: AsyncSession = Depends(get_db),
     _: None = Depends(authenticate_token),
 ):
-    return await career_listings_controller.get_organization_profile(request, db)
+    return await career_listings_service.get_organization_profile(request, db)
 
 @router.put("/organization-profile")
 async def update_organization_profile(
@@ -283,11 +281,11 @@ async def update_organization_profile(
     db: AsyncSession = Depends(get_db),
     _: None = Depends(authenticate_token),
 ):
-    return await career_listings_controller.update_organization_profile(request, schema, db)
+    return await career_listings_service.update_organization_profile(request, schema, db)
 
 @router.get("/recruiter-profile/meta")
 async def recruiter_meta(request: Request, _: None = Depends(authenticate_token)):
-    return await career_listings_controller.recruiter_meta(request)
+    return await career_listings_service.recruiter_meta(request)
 
 @router.get("/recruiter-profile")
 async def get_recruiter_profile(
@@ -295,7 +293,7 @@ async def get_recruiter_profile(
     db: AsyncSession = Depends(get_db),
     _: None = Depends(authenticate_token),
 ):
-    return await career_listings_controller.get_recruiter_profile(request, db)
+    return await career_listings_service.get_recruiter_profile(request, db)
 
 @router.put("/recruiter-profile")
 async def update_recruiter_profile(
@@ -304,7 +302,7 @@ async def update_recruiter_profile(
     db: AsyncSession = Depends(get_db),
     _: None = Depends(authenticate_token),
 ):
-    return await career_listings_controller.update_recruiter_profile(request, schema, db)
+    return await career_listings_service.update_recruiter_profile(request, schema, db)
 
 @router.post("/profile-verification/send-otp")
 async def send_email_otp(
@@ -313,7 +311,7 @@ async def send_email_otp(
     db: AsyncSession = Depends(get_db),
     _: None = Depends(authenticate_token),
 ):
-    return await career_listings_controller.send_email_otp(request, schema, db)
+    return await career_listings_service.send_email_otp(request, schema, db)
 
 @router.post("/profile-verification/verify-otp")
 async def verify_email_otp(
@@ -322,7 +320,7 @@ async def verify_email_otp(
     db: AsyncSession = Depends(get_db),
     _: None = Depends(authenticate_token),
 ):
-    return await career_listings_controller.verify_email_otp(request, schema, db)
+    return await career_listings_service.verify_email_otp(request, schema, db)
 
 @router.post("/phone-verification/send-otp")
 async def send_phone_otp(
@@ -330,7 +328,7 @@ async def send_phone_otp(
     schema: PhoneOtpSchema,
     _: None = Depends(authenticate_token),
 ):
-    return await career_listings_controller.send_phone_otp(request, schema)
+    return await career_listings_service.send_phone_otp(request, schema)
 
 @router.post("/phone-verification/verify-otp")
 async def verify_phone_otp(
@@ -339,7 +337,7 @@ async def verify_phone_otp(
     db: AsyncSession = Depends(get_db),
     _: None = Depends(authenticate_token),
 ):
-    return await career_listings_controller.verify_phone_otp(request, schema, db)
+    return await career_listings_service.verify_phone_otp(request, schema, db)
 
 @router.get("/recruiter-settings")
 async def get_recruiter_settings(
@@ -347,7 +345,7 @@ async def get_recruiter_settings(
     db: AsyncSession = Depends(get_db),
     _: None = Depends(authenticate_token),
 ):
-    return await career_listings_controller.get_recruiter_settings(request, db)
+    return await career_listings_service.get_recruiter_settings(request, db)
 
 @router.post("/recruiter-settings")
 async def update_recruiter_settings(
@@ -356,7 +354,7 @@ async def update_recruiter_settings(
     db: AsyncSession = Depends(get_db),
     _: None = Depends(authenticate_token),
 ):
-    return await career_listings_controller.update_recruiter_settings(request, schema, db)
+    return await career_listings_service.update_recruiter_settings(request, schema, db)
 
 @router.get("/account")
 async def get_account(
@@ -364,11 +362,11 @@ async def get_account(
     db: AsyncSession = Depends(get_db),
     _: None = Depends(authenticate_token),
 ):
-    return await career_listings_controller.get_account(request, db)
+    return await career_listings_service.get_account(request, db)
 
 @router.post("/account/signout")
 async def signout(request: Request):
-    return await career_listings_controller.signout(request)
+    return await career_listings_service.signout(request)
 
 @router.get("/plans")
 async def get_plans(
@@ -376,4 +374,4 @@ async def get_plans(
     db: AsyncSession = Depends(get_db),
     _: None = Depends(authenticate_token),
 ):
-    return await career_listings_controller.get_plans(request, db)
+    return await career_listings_service.get_plans(request, db)

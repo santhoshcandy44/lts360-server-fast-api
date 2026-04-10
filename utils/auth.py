@@ -13,7 +13,7 @@ import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
-from config import (
+from config.config import (
     ACCESS_TOKEN_SECRET,
     REFRESH_TOKEN_SECRET,
     FCM_TOKEN_SECRET,

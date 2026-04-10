@@ -1,4 +1,4 @@
-from database import get_db
+from db.database import get_db
 from .middleware.auth_middleware import authenticate_token
 
 from fastapi import APIRouter, Request, Depends
@@ -13,7 +13,7 @@ from schemas.app_schemas import (
     LookupByPhoneSchema,
 )
 
-from controllers import app_controller
+from services import app_service
 
 router = APIRouter(
     prefix="/app",
@@ -28,7 +28,7 @@ async def update_fcm_token(
     request: Request,
     db:      AsyncSession = Depends(get_db),
 ):
-    return await app_controller.update_fcm_token(request, body, db)
+    return await app_service.update_fcm_token(request, body, db)
 
 
 @router.put("/ee2ee-public-key")
@@ -37,7 +37,7 @@ async def update_e2ee_public_key(
     request: Request,
     db:      AsyncSession = Depends(get_db),
 ):
-    return await app_controller.update_e2ee_public_key(request, body, db)
+    return await app_service.update_e2ee_public_key(request, body, db)
 
 
 @router.get("/bookmarks")
@@ -46,7 +46,7 @@ async def get_bookmarks(
     params:  GetBookmarksSchema = Depends(),
     db:      AsyncSession = Depends(get_db),
 ):
-    return await app_controller.get_bookmarks(request, params, db)
+    return await app_service.get_bookmarks(request, params, db)
 
 
 @router.post("/sync-contacts")
@@ -55,7 +55,7 @@ async def sync_contacts(
     request: Request,
     db:      AsyncSession = Depends(get_db),
 ):
-    return await app_controller.sync_contacts(request, body, db)
+    return await app_service.sync_contacts(request, body, db)
 
 
 @router.get("/search-chats")
@@ -64,7 +64,7 @@ async def search_chats(
     params:  SearchChatsSchema = Depends(),
     db:      AsyncSession = Depends(get_db),
 ):
-    return await app_controller.search_chats(request, params, db)
+    return await app_service.search_chats(request, params, db)
 
 
 @router.get("/lookup/phone")
@@ -73,4 +73,4 @@ async def search_by_number(
     params:  LookupByPhoneSchema = Depends(),
     db:      AsyncSession = Depends(get_db),
 ):
-    return await app_controller.search_by_number(request, params, db)
+    return await app_service.search_by_number(request, params, db)

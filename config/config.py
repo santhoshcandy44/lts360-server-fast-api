@@ -2,7 +2,7 @@
 import os
 from dotenv import load_dotenv
 
-load_dotenv()  # load .env once here — no need to call it anywhere else
+load_dotenv() 
 
 # ── Database ─────────────────────────────────────────────────────────────────
 DATABASE_URL = os.getenv("DATABASE_URL")

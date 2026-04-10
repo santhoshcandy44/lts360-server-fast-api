@@ -1,7 +1,7 @@
 
 from datetime import datetime, timezone
 
-from config import REFRESH_TOKEN_SECRET, PROFILE_BASE_URL
+from config.config import REFRESH_TOKEN_SECRET, PROFILE_BASE_URL
 from helpers.response_helper import send_json_response, send_error_response
 
 from jose import JWTError, jwt
@@ -22,7 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from models.user import User
-from .board_controller import create_default_boards_for_user, get_boards, get_boards_by_user_id
+from .board_service import create_default_boards_for_user, get_boards, get_boards_by_user_id
 
 def _build_user_response(result) -> dict:
     return {

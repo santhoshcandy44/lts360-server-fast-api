@@ -1,9 +1,9 @@
-from config import ACCESS_TOKEN_SECRET, ALGORITHM
+from config.config import ACCESS_TOKEN_SECRET, ALGORITHM
 from helpers.response_helper import AppException
 from jose import jwt, JWTError
 from jose.exceptions import JWTClaimsError
 
-from database import get_db
+from db.database import get_db
 from models.job import RecruiterProfile
 from models.user import User
 

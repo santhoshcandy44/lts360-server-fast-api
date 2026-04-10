@@ -7,7 +7,7 @@ from typing import Optional, List
 
 from PIL import Image
 
-from config import BASE_URL
+from config.config import BASE_URL
 from models.common import City
 from models.user import UserLocation
 from schemas.job_schemas import ApplicantProfileSchema, GetJobsSchema, GetSavedJobsSchema, GuestGetJobsSchema, JobIdSchema, LocationSearchSuggestionsSchema, RoleSearchSuggestionsSchema, SkillSearchSuggestionsSchema, UpdateCertificatesSchema, UpdateEducationSchema, UpdateExperienceSchema, UpdateLanguagesSchema, UpdateNoExperienceSchema, UpdateProfessionalInfoSchema, UpdateResumeSchema, UpdateSkillsSchema

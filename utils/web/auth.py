@@ -30,7 +30,7 @@ async def cache_delete(key: str) -> None:
     async with _lock:
         _store.pop(key, None)
  
-from config import (
+from config.config import (
     ACCESS_TOKEN_EXPIRE_SECONDS,
     ACCESS_TOKEN_SECRET,
     ALGORITHM,

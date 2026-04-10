@@ -1,4 +1,4 @@
-from database import get_db
+from db.database import get_db
 from helpers.response_helper import AppException
 from .middleware.auth_middleware import authenticate_token
 
@@ -17,7 +17,7 @@ from schemas.profile_schemas import (
     UpdateLocationSchema,
 )
 
-from controllers import profile_controller
+from services import profile_service
 
 router = APIRouter(
     prefix="/profile",
@@ -31,7 +31,7 @@ async def get_profile(
     request: Request,
     db:      AsyncSession = Depends(get_db),
 ):
-    return await profile_controller.get_profile(request, db)
+    return await profile_service.get_profile(request, db)
 
 
 @router.patch("/first-name")
@@ -40,7 +40,7 @@ async def update_first_name(
     request: Request,
     db:      AsyncSession = Depends(get_db),
 ):
-    return await profile_controller.update_first_name(request, body, db)
+    return await profile_service.update_first_name(request, body, db)
 
 
 @router.patch("/last-name")
@@ -49,7 +49,7 @@ async def update_last_name(
     request: Request,
     db:      AsyncSession = Depends(get_db),
 ):
-    return await profile_controller.update_last_name(request, body, db)
+    return await profile_service.update_last_name(request, body, db)
 
 
 @router.patch("/about")
@@ -58,7 +58,7 @@ async def update_about(
     request: Request,
     db:      AsyncSession = Depends(get_db),
 ):
-    return await profile_controller.update_about(request, body, db)
+    return await profile_service.update_about(request, body, db)
 
 
 @router.patch("/profile-pic")
@@ -67,7 +67,7 @@ async def update_profile_pic(
     db:          AsyncSession = Depends(get_db),
     schema: UpdateProfilePicSchema   = Depends(),
 ):
-    return await profile_controller.update_profile_pic(request, schema, db)
+    return await profile_service.update_profile_pic(request, schema, db)
 
 
 @router.patch("/email")
@@ -76,7 +76,7 @@ async def update_email(
     request: Request,
     db:      AsyncSession = Depends(get_db),
 ):
-    return await profile_controller.update_email(request, schema, db)
+    return await profile_service.update_email(request, schema, db)
 
 @router.patch("/email-verify-otp")
 async def update_email_otp_verify(
@@ -84,7 +84,7 @@ async def update_email_otp_verify(
     request: Request,
     db:      AsyncSession = Depends(get_db),
 ):
-    return await profile_controller.update_email_otp_verify(request, schema, db)
+    return await profile_service.update_email_otp_verify(request, schema, db)
 
 
 @router.post("/phone/otp")
@@ -93,7 +93,7 @@ async def send_phone_otp(
     request: Request,
     db:      AsyncSession = Depends(get_db),
 ):
-    return await profile_controller.send_phone_otp(request, body, db)
+    return await profile_service.send_phone_otp(request, body, db)
 
 
 @router.post("/phone/verify-otp")
@@ -102,7 +102,7 @@ async def verify_phone_otp(
     request: Request,
     db:      AsyncSession = Depends(get_db),
 ):
-    return await profile_controller.verify_phone_otp(request, body, db)
+    return await profile_service.verify_phone_otp(request, body, db)
 
 
 @router.put("/location")
@@ -111,4 +111,4 @@ async def update_location(
     request: Request,
     db:      AsyncSession = Depends(get_db),
 ):
-    return await profile_controller.update_location(request, body, db)
+    return await profile_service.update_location(request, body, db)

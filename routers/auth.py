@@ -1,4 +1,4 @@
-from database import get_db
+from db.database import get_db
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -15,7 +15,7 @@ from schemas.auth_schemas import (
     ResetPasswordSchema,
 )
 
-from controllers import auth_controller
+from services import auth_service
 
 router = APIRouter(
     prefix="/auth",
@@ -28,7 +28,7 @@ async def register(
     request: Request,
     db:      AsyncSession = Depends(get_db),
 ):
-    return await auth_controller.register(request, schema, db)
+    return await auth_service.register(request, schema, db)
 
 @router.post("/register/otp/verify")
 async def verify_otp(
@@ -36,7 +36,7 @@ async def verify_otp(
     request: Request,
     db:      AsyncSession = Depends(get_db),
 ):
-    return await auth_controller.verify_otp(request, schema, db)
+    return await auth_service.verify_otp(request, schema, db)
 
 @router.post("/signup/google")
 async def google_sign_up(
@@ -44,7 +44,7 @@ async def google_sign_up(
     request: Request,
     db:      AsyncSession = Depends(get_db),
 ):
-    return await auth_controller.google_sign_up(request, schema, db)
+    return await auth_service.google_sign_up(request, schema, db)
 
 
 @router.post("/signin/email")
@@ -53,7 +53,7 @@ async def email_sign_in(
     schema:    EmailSignInSchema,
     db:      AsyncSession = Depends(get_db),
 ):
-    return await auth_controller.email_sign_in(request, schema, db)
+    return await auth_service.email_sign_in(request, schema, db)
 
 @router.post("/signin/google")
 async def google_sign_in(
@@ -61,7 +61,7 @@ async def google_sign_in(
     schema:    GoogleSignInSchema,
     db:      AsyncSession = Depends(get_db),
 ):
-    return await auth_controller.google_sign_in(request, schema, db)
+    return await auth_service.google_sign_in(request, schema, db)
 
 @router.post("/signin/lts360")
 async def partner_email_sign_in(
@@ -69,7 +69,7 @@ async def partner_email_sign_in(
     schema:    LTS360SignInSchema,
     db:      AsyncSession = Depends(get_db),
 ):
-    return await auth_controller.partner_email_sign_in(request, schema, db)
+    return await auth_service.partner_email_sign_in(request, schema, db)
 
 @router.post("/signin/lts360/google")
 async def partner_google_sign_in(
@@ -77,7 +77,7 @@ async def partner_google_sign_in(
     request: Request,
     db:      AsyncSession = Depends(get_db),
 ):
-    return await auth_controller.partner_google_sign_in(request, schema, db)
+    return await auth_service.partner_google_sign_in(request, schema, db)
 
 
 @router.post("/forgot-password/otp")
@@ -86,7 +86,7 @@ async def forgot_password(
     request: Request,
     db:      AsyncSession = Depends(get_db),
 ):
-    return await auth_controller.forgot_password(request, schema, db)
+    return await auth_service.forgot_password(request, schema, db)
 
 
 @router.post("/forgot-password/otp/verify")
@@ -95,7 +95,7 @@ async def forgot_password_verify_otp(
     request: Request,
     db:      AsyncSession = Depends(get_db),
 ):
-    return await auth_controller.forgot_password_verify_otp(request, schema, db)
+    return await auth_service.forgot_password_verify_otp(request, schema, db)
 
 
 @router.post("/reset-password")
@@ -104,7 +104,7 @@ async def reset_password(
     request: Request,
     db:      AsyncSession = Depends(get_db),
 ):
-    return await auth_controller.reset_password(request, schema, db)
+    return await auth_service.reset_password(request, schema, db)
 
 
 @router.post("/refresh-token")
@@ -112,4 +112,4 @@ async def refresh_token(
     request: Request,
     db:      AsyncSession = Depends(get_db),
 ):
-    return await auth_controller.refresh_token(request, db)
+    return await auth_service.refresh_token(request, db)

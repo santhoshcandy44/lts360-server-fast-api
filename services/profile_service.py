@@ -1,5 +1,5 @@
 import io
-from config import PROFILE_BASE_URL
+from config.config import PROFILE_BASE_URL
 import uuid
 from PIL import Image
 

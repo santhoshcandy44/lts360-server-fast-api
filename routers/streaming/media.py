@@ -1,15 +1,13 @@
 # routers/media.py
 import os
 import mimetypes
-from fastapi import APIRouter, Query, Request
+from fastapi import APIRouter, Query
 from fastapi.responses import StreamingResponse, Response
-from starlette.responses import FileResponse
-from utils.auth_utils import verify_short_encrypted_url
+from utils.auth import verify_short_encrypted_url
 from utils.aws_s3 import stream_s3_file
-from config import MEDIA_ROOT_PATH
+from config.config import MEDIA_ROOT_PATH
 
 router = APIRouter(tags=["Media"])
-
 
 # ── 1. Encrypted image token (profile pics) ───────────────────────────────────
 @router.get("/images")

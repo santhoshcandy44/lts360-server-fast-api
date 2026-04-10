@@ -12,7 +12,7 @@ from models.service import Service, ServiceIndustry, ServiceLocation, ServiceThu
 from models.used_product_listing import UsedProductListing, UsedProductListingImage, UsedProductListingLocation
 from models.local_job import LocalJob, LocalJobImage, LocalJobLocation
 from models.bookmark import UserBookmarkService, UserBookmarkUsedProductListing, UserBookmarkLocalJob
-from config import PROFILE_BASE_URL, MEDIA_BASE_URL, BASE_URL
+from config.config import PROFILE_BASE_URL, MEDIA_BASE_URL, BASE_URL
 
 from helpers.response_helper import send_json_response, send_error_response
 from utils.pagination.cursor import encode_cursor, decode_cursor

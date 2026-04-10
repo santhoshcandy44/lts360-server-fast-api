@@ -13,7 +13,7 @@ from sqlalchemy import delete, select ,and_, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from config import (
+from config.config import (
     ACCESS_TOKEN_SECRET,
     REFRESH_TOKEN_SECRET,
     PROFILE_BASE_URL,

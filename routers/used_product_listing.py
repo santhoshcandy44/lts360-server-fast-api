@@ -1,4 +1,4 @@
-from database import get_db
+from db.database import get_db
 from .middleware.auth_middleware import authenticate_token
 
 from fastapi import APIRouter, Depends, Request
@@ -22,7 +22,7 @@ from schemas.used_product_listing_schemas import (
     update_used_product_listing_form
 )
 
-from controllers import used_product_listing_controller
+from services import used_product_listing_service
 
 router = APIRouter(
     prefix="/used-product-listings",
@@ -35,7 +35,7 @@ async def guest_get_used_product_listings(
     schema:  GuestGetUsedProductListingsSchema = Depends(),
     db:      AsyncSession = Depends(get_db),
 ):
-    return await used_product_listing_controller.guest_get_used_product_listings(request, schema, db)
+    return await used_product_listing_service.guest_get_used_product_listings(request, schema, db)
 
 @router.get("/guest/users/profile/{user_id}")
 async def guest_get_user_profile_and_used_product_listings_by_user_id(
@@ -43,7 +43,7 @@ async def guest_get_user_profile_and_used_product_listings_by_user_id(
     schema:   GetUserProfileUsedProductListingsSchema = Depends(),
     db:      AsyncSession = Depends(get_db),
 ):
-    return await used_product_listing_controller.get_user_profile_and_used_product_listings(request, schema, db)
+    return await used_product_listing_service.get_user_profile_and_used_product_listings(request, schema, db)
 
 
 @router.get("/guest/users/{user_id}")
@@ -52,7 +52,7 @@ async def guest_get_used_product_listings_by_user_id(
     schema:   GetUsedProductListingsByUserIdSchema = Depends(),
     db:      AsyncSession = Depends(get_db),
 ):
-    return await used_product_listing_controller.get_used(request, schema, db)
+    return await used_product_listing_service.get_used(request, schema, db)
 
 
 @router.get("/guest/{used_product_listing_id}")
@@ -61,7 +61,7 @@ async def guest_get_used_product_listing_by_id(
     schema:  UsedProductListingIdParam = Depends(),
     db:      AsyncSession = Depends(get_db),
 ):
-    return await used_product_listing_controller.get_used_product_listing_by_used_product_listing_id(request, schema, db)
+    return await used_product_listing_service.get_used_product_listing_by_used_product_listing_id(request, schema, db)
 
 @router.get("/guest/search-suggestions")
 async def guest_used_product_listings_search_suggestions(
@@ -69,7 +69,7 @@ async def guest_used_product_listings_search_suggestions(
     schema:  UsedProductListingsSearchSuggestionsSchema = Depends(),
     db:      AsyncSession = Depends(get_db),
 ):
-    return await used_product_listing_controller.used_product_listings_search_suggestions(request, schema, db)
+    return await used_product_listing_service.used_product_listings_search_suggestions(request, schema, db)
 
 @router.get("/users/profile/{user_id}")
 async def get_user_profile_and_used_product_listings_by_user_id(
@@ -78,7 +78,7 @@ async def get_user_profile_and_used_product_listings_by_user_id(
     db:      AsyncSession = Depends(get_db),
     _:       None = Depends(authenticate_token),
 ):
-    return await used_product_listing_controller.get_user_profile_and_used_product_listings(request, schema, db)
+    return await used_product_listing_service.get_user_profile_and_used_product_listings(request, schema, db)
 
 
 @router.get("/users/{user_id}")
@@ -88,7 +88,7 @@ async def get_used_product_listings_by_user_id(
     db:      AsyncSession = Depends(get_db),
     _:       None = Depends(authenticate_token),
 ):
-    return await used_product_listing_controller.get_used_product_listings_by_user_id(request, schema, db)
+    return await used_product_listing_service.get_used_product_listings_by_user_id(request, schema, db)
 
 @router.get("")
 async def get_used_product_listings(
@@ -97,7 +97,7 @@ async def get_used_product_listings(
     db:      AsyncSession = Depends(get_db),
     _:       None = Depends(authenticate_token),
 ):
-    return await used_product_listing_controller.get_used_product_listings(request, schema, db)
+    return await used_product_listing_service.get_used_product_listings(request, schema, db)
 
 @router.post("")
 async def create_used_product_listing(
@@ -106,7 +106,7 @@ async def create_used_product_listing(
     db:      AsyncSession = Depends(get_db),
     _:       None = Depends(authenticate_token),
 ):
-    return await used_product_listing_controller.create_used_product_listing(request, schema, db)
+    return await used_product_listing_service.create_used_product_listing(request, schema, db)
     
 @router.put("/{used_product_listing_id}")
 async def update_used_product_listing(
@@ -115,7 +115,7 @@ async def update_used_product_listing(
     db:      AsyncSession = Depends(get_db),
     _:       None = Depends(authenticate_token),
 ):
-    return await used_product_listing_controller.update_used_product_listing(request, schema, db)  
+    return await used_product_listing_service.update_used_product_listing(request, schema, db)  
 
 @router.get("/published")
 async def get_published_used_product_listings(
@@ -124,7 +124,7 @@ async def get_published_used_product_listings(
     db:      AsyncSession = Depends(get_db),
     _:       None = Depends(authenticate_token),
 ):
-    return await used_product_listing_controller.get_published_used_product_listings(request, schema, db)
+    return await used_product_listing_service.get_published_used_product_listings(request, schema, db)
 
 
 @router.get("/published/{used_product_listing_id}")
@@ -134,7 +134,7 @@ async def get_published_used_product_listings(
     db:      AsyncSession = Depends(get_db),
     _:       None = Depends(authenticate_token),
 ):
-    return await used_product_listing_controller.get_published_used_product_listing_by_used_product_listing_id(request, schema, db)
+    return await used_product_listing_service.get_published_used_product_listing_by_used_product_listing_id(request, schema, db)
 
 @router.get("/publish/meta/options")
 async def get_publish_countries_options(
@@ -142,7 +142,7 @@ async def get_publish_countries_options(
     db:      AsyncSession = Depends(get_db),
     _:       None = Depends(authenticate_token),
 ):
-    return await used_product_listing_controller.get_publish_meta_options(request, db)
+    return await used_product_listing_service.get_publish_meta_options(request, db)
 
 @router.get("/publish/location/states/options")
 async def get_publish_states_options(
@@ -151,7 +151,7 @@ async def get_publish_states_options(
     db:      AsyncSession = Depends(get_db),
     _:       None = Depends(authenticate_token),
 ):
-    return await used_product_listing_controller.get_publish_states_options(request, schema, db)
+    return await used_product_listing_service.get_publish_states_options(request, schema, db)
 
 @router.get("/{used_product_listing_id}")
 async def get_used_product_listing_by_used_product_listing_id(
@@ -160,7 +160,7 @@ async def get_used_product_listing_by_used_product_listing_id(
     db:      AsyncSession = Depends(get_db),
     _:       None = Depends(authenticate_token),
 ):
-    return await used_product_listing_controller.get_used_product_listing_by_used_product_listing_id(request, schema, db)
+    return await used_product_listing_service.get_used_product_listing_by_used_product_listing_id(request, schema, db)
 
 
 @router.post("/{used_product_listing_id}/bookmark")
@@ -170,7 +170,7 @@ async def bookmark_used_product_listing(
     db:      AsyncSession = Depends(get_db),
     _:       None = Depends(authenticate_token),
 ):
-    return await used_product_listing_controller.bookmark_used_product_listing(request, schema, db)
+    return await used_product_listing_service.bookmark_used_product_listing(request, schema, db)
 
 
 @router.delete("/{used_product_listing_id}/bookmark")
@@ -180,7 +180,7 @@ async def unbookmark_used_product_listing(
     db:      AsyncSession = Depends(get_db),
     _:       None = Depends(authenticate_token),
 ):
-    return await used_product_listing_controller.unbookmark_used_product_listing(request, schema, db)
+    return await used_product_listing_service.unbookmark_used_product_listing(request, schema, db)
 
 @router.delete("/{used_product_listing_id}")
 async def delete_used_product_listing(
@@ -189,7 +189,7 @@ async def delete_used_product_listing(
     db:      AsyncSession = Depends(get_db),
     _:       None = Depends(authenticate_token),
 ):
-    return await used_product_listing_controller.delete_used_product_listing(request, schema, db)
+    return await used_product_listing_service.delete_used_product_listing(request, schema, db)
 
 @router.get("/search-suggestions")
 async def used_product_listings_search_suggestions(
@@ -198,4 +198,4 @@ async def used_product_listings_search_suggestions(
     db:      AsyncSession = Depends(get_db),
     _:       None = Depends(authenticate_token),
 ):
-    return await used_product_listing_controller.used_product_listings_search_suggestions(request, schema, db)
+    return await used_product_listing_service.used_product_listings_search_suggestions(request, schema, db)

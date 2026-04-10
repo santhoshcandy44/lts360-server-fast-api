@@ -31,7 +31,7 @@ from models.user import User, UserLocation
 from models.chat import ChatInfo
 from models.bookmark import UserBookmarkUsedProductListing
 
-from config import PROFILE_BASE_URL, MEDIA_BASE_URL, BASE_URL
+from config.config import PROFILE_BASE_URL, MEDIA_BASE_URL, BASE_URL
 from helpers.response_helper import send_json_response, send_error_response
 from utils.pagination.cursor import encode_cursor, decode_cursor
 from utils.aws_s3 import upload_to_s3, delete_from_s3, delete_directory_from_s3

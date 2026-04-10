@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from uuid import uuid4
 from typing import Any, Optional
-from config import API_DOC_BASE_URL
+from config.config import API_DOC_BASE_URL
 
 from fastapi import Request
 from fastapi.responses import JSONResponse

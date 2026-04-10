@@ -1,7 +1,7 @@
-from config import APP_NAME
+from config.config import APP_NAME
 from contextlib import asynccontextmanager
-from database import init_db, engine
-from job_database import init_job_db, job_engine
+from db.database import init_db, engine
+from db.job_database import init_job_db, job_engine
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -20,8 +20,8 @@ from routers import (
     job
 )
 
-
 from routers.web import career_listings
+from utils.aws_s3 import enable_aws_s3_versioning
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -41,6 +41,7 @@ async def lifespan(app: FastAPI):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    enable_aws_s3_versioning()
     # await start_consumers()
     yield
 

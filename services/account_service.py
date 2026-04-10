@@ -1,4 +1,4 @@
-from config import PROFILE_BASE_URL
+from config.config import PROFILE_BASE_URL
 
 from fastapi import Request
 from schemas.account_schemas import ChangePasswordSchema, ForgotPasswordSchema, ForgotPasswordVerifyOTPSchema, ResetPasswordSchema, UpdateAccountTypeSchema

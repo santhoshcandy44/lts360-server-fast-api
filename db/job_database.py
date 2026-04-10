@@ -1,6 +1,6 @@
 from sqlmodel import SQLModel
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
-from config import JOB_DATABASE_URL
+from config.config import JOB_DATABASE_URL
 
 job_engine = create_async_engine(
     JOB_DATABASE_URL,

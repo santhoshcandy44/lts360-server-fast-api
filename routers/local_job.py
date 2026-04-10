@@ -1,4 +1,4 @@
-from database import get_db
+from db.database import get_db
 from .middleware.auth_middleware import authenticate_token
 
 from fastapi import APIRouter, Depends, Request
@@ -22,7 +22,7 @@ from schemas.local_job_schemas import (
     update_local_job_form
 )
 
-from controllers import local_job_controller
+from services import local_job_service
 
 router = APIRouter(
     prefix="/local-jobs",
@@ -35,7 +35,7 @@ async def guest_get_local_jobs(
     schema:  GuestGetLocalJobsSchema = Depends(),
     db:      AsyncSession = Depends(get_db),
 ):
-    return await local_job_controller.guest_get_local_jobs(request, schema, db)
+    return await local_job_service.guest_get_local_jobs(request, schema, db)
 
 @router.get("/guest/{local_job_id}")
 async def guest_get_local_job(
@@ -43,7 +43,7 @@ async def guest_get_local_job(
     schema:       LocalJobIdSchema = Depends(),
     db:           AsyncSession = Depends(get_db),
 ):
-    return await local_job_controller.get_local_jobs(request, schema, db)
+    return await local_job_service.get_local_jobs(request, schema, db)
 
 @router.get("/guest/search-suggestions")
 async def guest_local_jobs_search_suggestion(
@@ -51,7 +51,7 @@ async def guest_local_jobs_search_suggestion(
     schema:  SearchSuggestionsSchema = Depends(),
     db:      AsyncSession = Depends(get_db),
 ):
-    return await local_job_controller.local_jobs_search_suggestion(request, schema, db)
+    return await local_job_service.local_jobs_search_suggestion(request, schema, db)
 
 
 @router.get("")
@@ -61,7 +61,7 @@ async def get_local_jobs(
     db:      AsyncSession = Depends(get_db),
     _:       None = Depends(authenticate_token),
 ):
-    return await local_job_controller.get_local_jobs(request, schema, db)
+    return await local_job_service.get_local_jobs(request, schema, db)
 
 @router.post("")
 async def create_local_job(
@@ -70,7 +70,7 @@ async def create_local_job(
     db:      AsyncSession                 = Depends(get_db),
     _:       None                         = Depends(authenticate_token),
 ):
-    return await local_job_controller.create_local_job(request, schema, db)
+    return await local_job_service.create_local_job(request, schema, db)
 
 @router.put("/{local_job_id}")
 async def update_local_job(
@@ -79,7 +79,7 @@ async def update_local_job(
     db:      AsyncSession = Depends(get_db),
     _:       None = Depends(authenticate_token),
 ):
-    return await local_job_controller.update_local_job(request, schema, db)  
+    return await local_job_service.update_local_job(request, schema, db)  
 
 @router.get("/published")                               
 async def get_publishd_local_jobs(
@@ -88,7 +88,7 @@ async def get_publishd_local_jobs(
     db:      AsyncSession = Depends(get_db),
     _:       None = Depends(authenticate_token),
 ):
-    return await local_job_controller.get_published_local_jobs(request, schema, db)
+    return await local_job_service.get_published_local_jobs(request, schema, db)
 
 
 @router.get("/published/{local_job_id}")                               
@@ -98,7 +98,7 @@ async def get_publishd_local_jobs(
     db:      AsyncSession = Depends(get_db),
     _:       None = Depends(authenticate_token),
 ):
-    return await local_job_controller.get_published_local_job(request, schema, db)
+    return await local_job_service.get_published_local_job(request, schema, db)
 
 @router.get("/publish/meta/options")
 async def get_publish_states_options(
@@ -106,7 +106,7 @@ async def get_publish_states_options(
     db:      AsyncSession = Depends(get_db),
     _:       None = Depends(authenticate_token),
 ):
-    return await local_job_controller.get_publish_meta_options(request, db)
+    return await local_job_service.get_publish_meta_options(request, db)
 
 @router.get("/publish/location/states/options")
 async def get_publish_states_options(
@@ -115,7 +115,7 @@ async def get_publish_states_options(
     db:      AsyncSession = Depends(get_db),
     _:       None = Depends(authenticate_token),
 ):
-    return await local_job_controller.get_publish_states_options(request, schema, db)
+    return await local_job_service.get_publish_states_options(request, schema, db)
 
 @router.get("/{local_job_id}")                   
 async def get_local_job(
@@ -124,7 +124,7 @@ async def get_local_job(
     db:           AsyncSession = Depends(get_db),
     _:            None = Depends(authenticate_token),
 ):
-    return await local_job_controller.get_local_job(request, schema, db)
+    return await local_job_service.get_local_job(request, schema, db)
 
 @router.post("/{local_job_id}/apply")
 async def apply_local_job(
@@ -133,7 +133,7 @@ async def apply_local_job(
     db:      AsyncSession = Depends(get_db),
     _:       None = Depends(authenticate_token),
 ):
-    return await local_job_controller.apply_local_job(request, schema, db)
+    return await local_job_service.apply_local_job(request, schema, db)
 
 @router.delete("/{local_job_id}")
 async def delete_local_job(
@@ -142,7 +142,7 @@ async def delete_local_job(
     db:      AsyncSession = Depends(get_db),
     _:       None = Depends(authenticate_token),
 ):
-    return await local_job_controller.delete_local_job(request, schema, db)
+    return await local_job_service.delete_local_job(request, schema, db)
 
 
 @router.get("/{local_job_id}/applications")
@@ -152,7 +152,7 @@ async def get_local_job_applications(
     db:      AsyncSession = Depends(get_db),
     _:       None = Depends(authenticate_token),
 ):
-    return await local_job_controller.get_local_job_applications(request, schema, db)
+    return await local_job_service.get_local_job_applications(request, schema, db)
 
 @router.post("/{local_job_id}/applications/{application_id}/review")
 async def mark_as_reviewed_local_job(
@@ -161,7 +161,7 @@ async def mark_as_reviewed_local_job(
     db:      AsyncSession = Depends(get_db),
     _:       None = Depends(authenticate_token),
 ):
-    return await local_job_controller.mark_as_reviewed_local_job_application(request, schema, db)
+    return await local_job_service.mark_as_reviewed_local_job_application(request, schema, db)
 
 @router.delete("/{local_job_id}/applications/{application_id}/review")
 async def unmark_reviewed_local_job(
@@ -170,7 +170,7 @@ async def unmark_reviewed_local_job(
     db:      AsyncSession = Depends(get_db),
     _:       None = Depends(authenticate_token),
 ):
-    return await local_job_controller.unmark_reviewed_local_job_application(request, schema, db)
+    return await local_job_service.unmark_reviewed_local_job_application(request, schema, db)
 
 @router.post("/{local_job_id}/bookmark")
 async def bookmark_local_job(
@@ -179,7 +179,7 @@ async def bookmark_local_job(
     db:      AsyncSession = Depends(get_db),
     _:       None = Depends(authenticate_token),
 ):
-    return await local_job_controller.bookmark_local_job(request, schema, db)
+    return await local_job_service.bookmark_local_job(request, schema, db)
 
 
 @router.delete("/{local_job_id}/bookmark")
@@ -189,7 +189,7 @@ async def unbookmark_local_job(
     db:      AsyncSession = Depends(get_db),
     _:       None = Depends(authenticate_token),
 ):
-    return await local_job_controller.unbookmark_local_job(request, schema, db)
+    return await local_job_service.unbookmark_local_job(request, schema, db)
 
 @router.get("/search-suggestions")
 async def local_jobs_search_suggestion(
@@ -198,4 +198,4 @@ async def local_jobs_search_suggestion(
     db:      AsyncSession = Depends(get_db),
     _:       None = Depends(authenticate_token),
 ):
-    return await local_job_controller.local_jobs_search_queries(request, schema, db)
+    return await local_job_service.local_jobs_search_queries(request, schema, db)
