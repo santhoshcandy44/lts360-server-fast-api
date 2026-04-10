@@ -25,25 +25,24 @@ from utils.aws_s3 import enable_aws_s3_versioning
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # DB connections
     await init_db()
     print("✅ LTS360 connected & tables ready")
+
+    await init_job_db()
+    print("✅ LTS360 Jobs connected & tables ready")
+
+    # AWS setup
+    await enable_aws_s3_versioning()
+
     yield
+
+    # Shutdown
     await engine.dispose()
     print("🛑 LTS360 Shutting down")
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    await init_job_db()()
-    print("✅ LTS360 Jobs connected & tables ready")
-    yield
     await job_engine.dispose()
-    print("🛑 LTS360 Jobs Shutting down")    
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    enable_aws_s3_versioning()
-    # await start_consumers()
-    yield
+    print("🛑 LTS360 Jobs Shutting down")
 
 app = FastAPI(title=APP_NAME, lifespan=lifespan)
 app.add_middleware(
